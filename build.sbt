@@ -27,6 +27,10 @@ lazy val sharedSettings = Seq(
   )
 )
 
+lazy val proto = project
+  .in(file("proto"))
+  .enablePlugins(Fs2Grpc)
+
 lazy val client = project
   .in(file("client"))
   .settings(sharedSettings)
@@ -37,6 +41,7 @@ lazy val client = project
       "co.fs2" %% "fs2-core" % "3.7.0"
     )
   )
+  .dependsOn(proto)
 
 // lazy val core = project
 //   .in(file("modules/core"))
