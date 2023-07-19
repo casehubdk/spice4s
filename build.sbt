@@ -31,6 +31,7 @@ lazy val proto = project
   .in(file("proto"))
   .enablePlugins(Fs2Grpc)
   .settings(
+    name := "spice4s-client-proto-api",
     Compile / PB.targets := Seq(
       scalapb.gen() -> (Compile / sourceManaged).value / "scalapb",
       scalapb.validate.gen() -> (Compile / sourceManaged).value / "scalapb"
