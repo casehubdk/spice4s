@@ -17,5 +17,7 @@ package object util {
       if (regex.matches(value.encode)) value.valid
       else List(ValidationFailure("regex-field", value.encode, s"$value with encoded value ${value.encode} does not match regex ${regex.toString}")).invalid
   }
+
+  def validator[A: Validator](value: A): Validated[List[ValidationFailure], A]
 }
 
