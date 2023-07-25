@@ -4,7 +4,7 @@ import cats.data._
 import scalapb.validate._
 import spice4s.client.util._
 
-sealed abstract case class Type private (value: String) extends Encodable[String] {
+sealed abstract case class Type private (value: String) {
   def encode = value
 }
 
@@ -14,5 +14,5 @@ object Type {
   def unsafeFromString(value: String): Type = new Type(value) {}
 
   def apply(value: String): Validated[List[ValidationFailure], Type] =
-    unsafeFromString(value).validateRegex(validationRegex)
+    unsafeFromString(value).validateRegex(validationRegex)(_.value)
 }
