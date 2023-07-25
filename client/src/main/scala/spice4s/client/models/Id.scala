@@ -11,6 +11,6 @@ object Id {
 
   def unsafeFromString(value: String): Id = new Id(value) {}
 
-  def apply(value: String): Validated[List[ValidationFailure], Id] =
+  def apply(value: String): Validation[Id] =
     unsafeFromString(value).validateRegex(validationRegex)(_.value)
 }

@@ -16,12 +16,15 @@ package object util {
     def validateRegex(regex: Regex)(f: A => String): Validated[List[ValidationFailure], A] =
       if (regex.matches(f(value))) value.valid
       else
-        List(
-          ValidationFailure(
-            "regex-field",
-            f(value),
-            s"$value with encoded value ${f(value)} does not match regex ${regex.toString}"
-          )
-        ).invalid
+        invalid(
+          "regex-field",
+          f(value),
+          s"$value with encoded value ${f(value)} does not match regex ${regex.toString}"
+        )
   }
+
+  type Validation[A] = Validated[List[ValidationFailure], A]
+
+  def invalid[A](name: String, a: Any, reason: String): Validation[A] =
+    List(ValidationFailure(name, a.toString, reason)).invalid
 }
