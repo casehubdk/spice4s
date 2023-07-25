@@ -1,6 +1,8 @@
 package spice4s.client.models
 
 import com.authzed.api.v1.core
+import spice4s.client.util._
+import cats.implicits._
 
 final case class ObjectReference(
     objectType: Type,
@@ -10,4 +12,12 @@ final case class ObjectReference(
     objectType.value,
     objectId.value
   )
+}
+
+object ObjectReference {
+  def decode(x: core.ObjectReference): Decoded[ObjectReference] =
+    (
+      field("objectType")(Type.decode(x.objectType) andThen req),
+      field("objectId")(Id.decode(x.objectId) andThen req)
+    ).mapN(ObjectReference.apply)
 }

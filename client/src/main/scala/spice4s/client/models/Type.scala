@@ -3,6 +3,7 @@ package spice4s.client.models
 import cats.data._
 import scalapb.validate._
 import spice4s.client.util._
+import cats.implicits._
 
 sealed abstract case class Type private (value: String)
 
@@ -13,4 +14,7 @@ object Type {
 
   def apply(value: String): Validation[Type] =
     unsafeFromString(value).validateRegex(validationRegex)(_.value)
+
+  def decode(x: String): Decoded[Option[Type]] =
+    opt(x).map(unsafeFromString).pure[Decoded]
 }

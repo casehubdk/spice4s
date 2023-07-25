@@ -2,6 +2,7 @@ package spice4s.client.models
 
 import cats.data._
 import scalapb.validate._
+import cats.implicits._
 import spice4s.client.util._
 
 sealed abstract case class Relation private (value: String)
@@ -13,4 +14,7 @@ object Relation {
 
   def apply(value: String): Validation[Relation] =
     unsafeFromString(value).validateRegex(validationRegex)(_.value)
+
+  def decode(x: String): Decoded[Option[Relation]] =
+    opt(x).map(unsafeFromString).pure[Decoded]
 }
