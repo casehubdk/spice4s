@@ -12,6 +12,6 @@ sealed abstract case class ZedToken private (token: String) extends Encodable[co
 object ZedToken {
   def unsafeFromString(token: String): ZedToken = new ZedToken(token) {}
 
-  def apply(token: String): Validated[List[ValidationFailure], ZedToken] = 
-    unsafeFromString(token).validate[core.ZedToken]
+  def apply(token: String): Validated[List[ValidationFailure], ZedToken] =
+    unsafeFromString(token).validator[core.ZedToken]
 }

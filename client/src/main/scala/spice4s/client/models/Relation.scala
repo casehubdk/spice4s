@@ -13,6 +13,6 @@ object Relation {
 
   def unsafeFromString(value: String): Relation = new Relation(value) {}
 
-  def apply(value: String): Validated[List[ValidationFailure],Relation] = 
+  def apply(value: String): Validated[List[ValidationFailure], Relation] =
     unsafeFromString(value).validateRegex(validationRegex)
 }

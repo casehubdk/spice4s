@@ -13,6 +13,6 @@ object Type {
 
   def unsafeFromString(value: String): Type = new Type(value) {}
 
-  def apply(value: String): Validated[List[ValidationFailure],Type] = 
+  def apply(value: String): Validated[List[ValidationFailure], Type] =
     unsafeFromString(value).validateRegex(validationRegex)
 }
