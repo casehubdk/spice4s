@@ -1,6 +1,10 @@
 package spice4s.client.models
 
-sealed abstract case class Cursor private (token: String)
+import com.authzed.api.v1.core
+
+sealed abstract case class Cursor private (token: String) {
+  def encode = core.Cursor.of(token)
+}
 
 object Cursor {
   def unsafeFromString(token: String): Cursor = new Cursor(token) {}
