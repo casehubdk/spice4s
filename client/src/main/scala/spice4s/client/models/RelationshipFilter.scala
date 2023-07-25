@@ -12,10 +12,10 @@ final case class RelationshipFilter(
     relation: Option[Relation],
     subjectFilter: Option[SubjectFilter]
 ) {
-  // def encode = ps.RelationshipFilter.of(
-  //   resourceType.encode,
-  //   resourceId.foldMap(_.encode),
-  //   relation.foldMap(_.encode),
-  //   subjectFilter.map(_.encode)
-  // )
+  def encode = ps.RelationshipFilter.of(
+    resourceType.value,
+    resourceId.foldMap(_.value),
+    relation.foldMap(_.value),
+    subjectFilter.map(_.encode)
+  )
 }
