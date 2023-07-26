@@ -54,6 +54,16 @@ lazy val client = project
   )
   .dependsOn(proto)
 
+lazy val parser = project
+  .in(file("parser"))
+  .settings(sharedSettings)
+  .settings(
+    name := "spice4s-parser",
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-parse" % "0.3.9"
+    )
+  )
+
 // lazy val core = project
 //   .in(file("modules/core"))
 //   .settings(sharedSettings)
