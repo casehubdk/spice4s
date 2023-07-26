@@ -1,7 +1,5 @@
 package spice4s.client.models
 
-import cats.data._
-import scalapb.validate._
 import spice4s.client.util._
 import cats.implicits._
 

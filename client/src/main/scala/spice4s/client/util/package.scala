@@ -56,8 +56,4 @@ package object util {
   def opt[A: Monoid: Eq](a: A): Option[A] =
     if (a.isEmpty) None
     else Some(a)
-
-  // def nonEmpty[A: Monoid: Eq](a: A): Decoded[A] =
-  //   if (a.isEmpty) raise("value was empty")
-  //   else a.validNec
 }

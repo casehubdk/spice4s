@@ -7,9 +7,7 @@ import com.authzed.api.v1.permission_service.PermissionsServiceFs2Grpc
 import spice4s.client.models._
 import spice4s.client.util._
 import fs2.Stream
-import cats.data._
-import io.grpc.Channel
-import io.grpc.Metadata
+import io.grpc._
 
 trait SpiceClient[F[_]] { self =>
   def readRelationships(x: ReadRelationshipsRequest): Stream[F, ReadRelationshipsResponse]
