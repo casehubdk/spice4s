@@ -57,15 +57,7 @@ package object util {
     if (a.isEmpty) None
     else Some(a)
 
-  def nonEmpty[A: Monoid: Eq](a: A): Decoded[A] =
-    if (a.isEmpty) raise("value was empty")
-    else a.validNec
-
-  /*
-   def decode(x: raw.Data): Decoded[Data] =
-     (
-       field("child")(req(x.child).andThen(Child.decode)),
-       field("name")(x.name.traverse(Name.decode)),
-     ).mapN(Data.apply)
-   */
+  // def nonEmpty[A: Monoid: Eq](a: A): Decoded[A] =
+  //   if (a.isEmpty) raise("value was empty")
+  //   else a.validNec
 }
