@@ -33,7 +33,9 @@ package object util {
   final case class DecoderError(message: String, path: Chain[String]) {
     def prepend(p: String): DecoderError = copy(path = p +: path)
   }
-  final case class DecoderException(errors: NonEmptyChain[DecoderError]) extends Exception(errors.map(_.message).toList.mkString("\n"))
+  final case class DecoderException(
+      errors: NonEmptyChain[DecoderError]
+  ) extends Exception(errors.map(x => s"${x.message} at ${x.path.intercalate(".")}").toList.mkString("\n"))
 
   type Decoded[A] = ValidatedNec[DecoderError, A]
   def raise[A](message: String): Decoded[A] =
@@ -41,6 +43,9 @@ package object util {
 
   def raiseIn[F[_], A](fa: Decoded[A])(implicit F: ApplicativeError[F, Throwable]): F[A] =
     F.fromValidated(fa.leftMap(DecoderException(_)))
+
+  def indexed[G[_]: Traverse, A](xs: G[Decoded[A]]): Decoded[G[A]] =
+    xs.zipWithIndex.traverse { case (d, i) => field(s"[$i]")(d) }
 
   def field[A](name: String)(fa: Decoded[A]): Decoded[A] =
     fa.leftMap(_.map(_.prepend(name)))
