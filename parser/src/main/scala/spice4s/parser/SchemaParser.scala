@@ -9,8 +9,8 @@ object SchemaParser {
 
   val lineTerminator = R.lf | R.crlf | R.cr
 
-  val lineComment = P.string("//") *> P.anyChar.repUntil(lineTerminator).void
-  val blockComment = P.string("/*") *> P.anyChar.repUntil(P.string("*/")).void
+  val lineComment = (P.string("//").with1 *> P.anyChar.repUntil(lineTerminator) *> lineTerminator).void
+  val blockComment = (P.string("/*").with1 *> P.anyChar.repUntil(P.string("*/")) *> P.string("*/")).void
 
   val sep = blockComment | (lineComment *> lineTerminator) | lineTerminator | whiteSpace
 
@@ -22,15 +22,20 @@ object SchemaParser {
 
   val lowerAlpha = P.charIn('a' to 'z')
 
-  val identBody = lowerAlpha | N.digit
+  val identSuffix = lowerAlpha | N.digit
 
-  val identSuffix = identBody | P.charIn("_")
+  val identBody = identSuffix | P.char('_')
 
   val definition = s("definition")
 
   //"^([a-z][a-z0-9_]{1,61}[a-z0-9]/)?[a-z][a-z0-9_]{1,62}[a-z0-9]$".r
+  // def countdownParser(n: Int) =
+  //   if (n == 61) identSuffix ~ P.char('/')
+  //   else (identSuffix ~ P.char('/')) | (identBody ~ countdownParser(n - 1))
+
   val resourceName = P.string {
-    def ident(n: Int) = lowerAlpha *> identBody.rep(1, n) *> identSuffix
+    def ident(n: Int) = lowerAlpha *> (identBody.soft <* P.peek(identBody)).rep(1, n) *> identSuffix
+
     (ident(61).soft *> P.char('/')).?.with1 *> ident(62)
   }
 
@@ -38,7 +43,7 @@ object SchemaParser {
 
   //"^([a-z][a-z0-9_]{1,62}[a-z0-9])?$".r
   val relationName = P.string {
-    lowerAlpha *> identBody.rep(1, 62) *> identSuffix
+    lowerAlpha *> (identBody.soft <* P.peek(identBody)).rep(1, 62) *> identSuffix
   }
 
   sealed trait ResourceRelationType
@@ -48,7 +53,7 @@ object SchemaParser {
   }
   val resourceRelationType: P[ResourceRelationType] =
     (P.char('#') *> relationName).map(ResourceRelationType.Relation.apply) |
-      P.string(":*").as(ResourceRelationType.Wildcard)
+      P.string(":*").backtrack.as(ResourceRelationType.Wildcard)
 
   final case class ResourceReference(
       resource: String,
@@ -92,7 +97,7 @@ object SchemaParser {
   ) extends ResourceDef
   val permissionDef: P[PermissionDef] = (
     (permission *> p(relationName) <* t('=')) ~
-      permissionExpr ~
+      p(permissionExpr) ~
       (permissionBinOp ~ permissionExpr).rep0
   ).map { case ((name, hd), tl) => PermissionDef(name, hd, tl) }
 
@@ -105,11 +110,11 @@ object SchemaParser {
       content: List[ResourceDef]
   )
   val resource: P[Resource] = p {
-    (
-      (definition *> p(resourceName)) ~
-        (t('{') *> resourceDef.rep0 <* t('}'))
-    ).map { case (name, content) => Resource(name, content) }
+    ((definition *> p(resourceName)) ~ resourceDef.rep0.between(t('{'), t('}')))
+      .map { case (name, content) => Resource(name, content) }
   }
 
-  val schema: P0[List[Resource]] = resource.rep0 <* seps0
+  val schema: P0[List[Resource]] = {
+    seps0 *> resource.rep0
+  }
 }
