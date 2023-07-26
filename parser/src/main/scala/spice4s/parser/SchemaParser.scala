@@ -29,9 +29,6 @@ object SchemaParser {
   val definition = s("definition")
 
   //"^([a-z][a-z0-9_]{1,61}[a-z0-9]/)?[a-z][a-z0-9_]{1,62}[a-z0-9]$".r
-  // def countdownParser(n: Int) =
-  //   if (n == 61) identSuffix ~ P.char('/')
-  //   else (identSuffix ~ P.char('/')) | (identBody ~ countdownParser(n - 1))
 
   val resourceName = P.string {
     def ident(n: Int) = lowerAlpha *> (identBody.soft <* P.peek(identBody)).rep(1, n) *> identSuffix
@@ -90,20 +87,33 @@ object SchemaParser {
       t('&').as(PermissionBinOp.Intersection) |
       t('-').as(PermissionBinOp.Exclusion)
 
+  sealed trait PermissionExpression
+  object PermissionExpression {
+    final case class Leaf(xs: NonEmptyList[String]) extends PermissionExpression
+    final case class BinaryOp(op: PermissionBinOp, lhs: PermissionExpression, rhs: PermissionExpression) extends PermissionExpression
+  }
+
+  lazy val permissionExpression: P[PermissionExpression] = P.defer {
+    lazy val leaf = p(relationName.repSep(P.string("->").backtrack).map(PermissionExpression.Leaf.apply))
+
+    def tryBinary(p: P[PermissionExpression]): P[PermissionExpression] =
+      (p ~ (permissionBinOp ~ permissionExpression).?).map {
+        case (lhs, None)            => lhs
+        case (lhs, Some((op, rhs))) => PermissionExpression.BinaryOp(op, lhs, rhs)
+      }
+
+    tryBinary(leaf) | tryBinary(permissionExpression.between(t('('), t(')')))
+  }
+
   final case class PermissionDef(
       name: String,
-      head: PermissionExpr,
-      tail: List[(PermissionBinOp, PermissionExpr)]
+      expr: PermissionExpression
   ) extends ResourceDef
   val permissionDef: P[PermissionDef] = (
-    (permission *> p(relationName) <* t('=')) ~
-      p(permissionExpr) ~
-      (permissionBinOp ~ permissionExpr).rep0
-  ).map { case ((name, hd), tl) => PermissionDef(name, hd, tl) }
+    (permission *> p(relationName) <* t('=')) ~ permissionExpression
+  ).map { case (name, expr) => PermissionDef(name, expr) }
 
-  val resourceDef: P[ResourceDef] =
-    p(resourceRelation) |
-      p(permissionDef)
+  val resourceDef: P[ResourceDef] = p(resourceRelation) | p(permissionDef)
 
   final case class Resource(
       name: String,
