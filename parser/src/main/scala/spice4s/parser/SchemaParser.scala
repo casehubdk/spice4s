@@ -12,7 +12,7 @@ object SchemaParser {
   val lineComment = (P.string("//").with1 *> P.anyChar.repUntil(lineTerminator) *> lineTerminator).void
   val blockComment = (P.string("/*").with1 *> P.anyChar.repUntil(P.string("*/")) *> P.string("*/")).void
 
-  val sep = blockComment | (lineComment *> lineTerminator) | lineTerminator | whiteSpace
+  val sep = blockComment | lineComment | lineTerminator | whiteSpace
 
   val seps0 = sep.rep0.void
 
