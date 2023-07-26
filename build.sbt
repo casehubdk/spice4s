@@ -32,9 +32,8 @@ lazy val proto = project
   .enablePlugins(Fs2Grpc)
   .settings(
     name := "spice4s-client-proto-api",
-    Compile / PB.targets := Seq(
-      scalapb.gen() -> (Compile / sourceManaged).value / "scalapb",
-      scalapb.validate.gen() -> (Compile / sourceManaged).value / "scalapb"
+    scalapbCodeGenerators := scalapbCodeGenerators.value ++ Seq(
+      protocbridge.Target(scalapb.validate.gen(), (Compile / sourceManaged).value / "scalapb")
     ),
     libraryDependencies ++= Seq(
       "com.thesamet.scalapb" %% "scalapb-validate-core" % scalapb.validate.compiler.BuildInfo.version % "protobuf",
@@ -59,7 +58,7 @@ lazy val client = project
 //   .in(file("modules/core"))
 //   .settings(sharedSettings)
 //   .settings(name := "hxl")
-// 
+//
 // lazy val natchez = project
 //   .in(file("modules/natchez"))
 //   .dependsOn(core)
