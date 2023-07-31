@@ -64,20 +64,15 @@ lazy val parser = project
     )
   )
 
-// lazy val core = project
-//   .in(file("modules/core"))
-//   .settings(sharedSettings)
-//   .settings(name := "hxl")
-//
-// lazy val natchez = project
-//   .in(file("modules/natchez"))
-//   .dependsOn(core)
-//   .settings(sharedSettings)
-//   .settings(
-//     libraryDependencies ++= Seq(
-//       "org.tpolecat" %% "natchez-core" % "0.3.2",
-//       "org.tpolecat" %% "natchez-noop" % "0.3.2" % Test,
-//       "org.tpolecat" %% "natchez-testkit" % "0.3.2" % Test
-//     )
-//   )
-//   .settings(name := "hxl-natchez")
+lazy val generator = project
+  .in(file("generator"))
+  .settings(sharedSettings)
+  .dependsOn(parser)
+  .settings(
+    name := "spice4s-generator",
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % "3.5.1",
+      "co.fs2" %% "fs2-core" % "3.7.0",
+      "org.scalameta" %% "scalameta" % "4.8.6",
+    )
+  )
