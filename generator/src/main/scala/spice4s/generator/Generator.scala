@@ -52,7 +52,7 @@ object Generator extends App {
     q"val ${Pat.Var(defName)} = Relation.unsafeFromString($n)"
   }
 
-  println(resourceReferenceTrait(ResourceReference("")))
+  // println(resourceReferenceTrait(ResourceReference("")))
 
   // println(definitionReference("hest/hest").syntax)
 
