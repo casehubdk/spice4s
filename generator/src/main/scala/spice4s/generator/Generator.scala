@@ -3,6 +3,7 @@ package spice4s.generator
 import cats.implicits._
 import scala.meta._
 import spice4s.parser.SchemaParser._
+import cats.data.NonEmptyList
 
 object Generator extends App {
   def resource: Defn.Trait = q"""
@@ -22,22 +23,38 @@ object Generator extends App {
   def snake2Obj(x: String): Term.Name =
     Term.Name(snake2camel(x).capitalize)
 
-  def definitionReference(x: String): Type.Ref =
+  def definitionTypeReference(x: String): Type.Ref =
     x.split("/").toList match {
       case x :: Nil      => snake2Type(x)
       case x :: y :: Nil => Type.Select(snake2Obj(x), snake2Type(y))
       case _             => ???
     }
 
-  def resourceReference(rr: ResourceReference) = {
+  def definitionValueReference(x: String): Term.Ref =
+    x.split("/").toList match {
+      case x :: Nil      => snake2Obj(x)
+      case x :: y :: Nil => Term.Select(snake2Obj(x), snake2Obj(y))
+      case _             => ???
+    }
+
+  // def resourceReferenceTrait(rr: ResourceReference, whoReferresToThis: NonEmptyList[String]) = {
+  //   val w = whoReferresToThis.map(snake2Type).map(n => Init(n, Term.Name(""), Seq.empty)).toList
+  //   q"sealed trait ${Type.Name(rr.resource)} extends ..$w"
+  // }
+
+  def resourceReferenceExts(rr: ResourceReference) =  {
     rr.resource
   }
 
-  def relationDef(rd: RelationDef) = {
-    
+  def relationDefRelation(rd: RelationDef): Defn.Val = {
+    val n = Term.Name(rd.name)
+    val defName = Term.Name(n.value + "Relation")
+    q"val ${Pat.Var(defName)} = Relation.unsafeFromString($n)"
   }
 
-  println(definitionReference("hest/hest").syntax)
+  println(resourceReferenceTrait(ResourceReference("")))
+
+  // println(definitionReference("hest/hest").syntax)
 
   // def hesteInits = List(init"Resource", init"Resource2(hest)")
 
