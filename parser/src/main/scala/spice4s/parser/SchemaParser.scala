@@ -1,7 +1,6 @@
 package spice4s.parser
 
-import cats.implicits._
-import cats.parse.{Parser => P, Numbers => N, Rfc5234 => R, Parser0 => P0}
+import cats.parse.{Parser => P, Numbers => N, Rfc5234 => R, Parser0 => P0, Caret}
 import cats.data._
 
 object SchemaParser {
@@ -54,21 +53,26 @@ object SchemaParser {
 
   final case class ResourceReference(
       resource: String,
-      relation: Option[ResourceRelationType]
+      relation: Option[ResourceRelationType],
+      caret: Caret
   )
   val resourceIndex: P[ResourceReference] =
-    (resourceName ~ resourceRelationType.?).map { case (d, r) => ResourceReference(d, r) }
+    (P.caret.with1 ~ resourceName ~ resourceRelationType.?).map { case ((c, d), r) => ResourceReference(d, r, c) }
 
-  sealed trait ResourceDef
+  sealed trait ResourceDef {
+    def name: String
+  }
 
   final case class RelationDef(
       name: String,
-      resources: NonEmptyList[ResourceReference]
+      resources: NonEmptyList[ResourceReference],
+      caret: Caret
   ) extends ResourceDef
   val resourceRelation: P[RelationDef] = (
-    p(relation *> relationName) <* t(':'),
-    p(resourceIndex).repSep(t('|'))
-  ).mapN(RelationDef.apply)
+    P.caret.with1 ~
+      (p(relation *> relationName) <* t(':')) ~
+      p(resourceIndex).repSep(t('|'))
+  ).map { case ((c, name), resources) => RelationDef(name, resources, c) }
 
   val permission = s("permission")
 
@@ -107,18 +111,21 @@ object SchemaParser {
 
   final case class PermissionDef(
       name: String,
-      expr: PermissionExpression
+      expr: PermissionExpression,
+      caret: Caret
   ) extends ResourceDef
   val permissionDef: P[PermissionDef] = (
-    (permission *> p(relationName) <* t('=')) ~ permissionExpression
-  ).map { case (name, expr) => PermissionDef(name, expr) }
+    P.caret.with1 ~ (permission *> p(relationName) <* t('=')) ~ permissionExpression
+  ).map { case ((c, name), expr) => PermissionDef(name, expr, c) }
 
   val resourceDef: P[ResourceDef] = p(resourceRelation) | p(permissionDef)
 
   final case class Resource(
       name: String,
       content: List[ResourceDef]
-  )
+  ) {
+    lazy val lookup = content.map(x => x.name -> x).toMap
+  }
   val resource: P[Resource] = p {
     ((definition *> p(resourceName)) ~ resourceDef.rep0.between(t('{'), t('}')))
       .map { case (name, content) => Resource(name, content) }

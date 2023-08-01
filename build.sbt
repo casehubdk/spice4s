@@ -68,11 +68,13 @@ lazy val generator = project
   .in(file("generator"))
   .settings(sharedSettings)
   .dependsOn(parser)
+  .dependsOn(client)
   .settings(
     name := "spice4s-generator",
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-effect" % "3.5.1",
       "co.fs2" %% "fs2-core" % "3.7.0",
       "org.scalameta" %% "scalameta" % "4.8.6",
+      "org.typelevel" %% "cats-mtl" % "1.3.0"
     )
   )
