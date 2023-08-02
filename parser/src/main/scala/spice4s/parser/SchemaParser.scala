@@ -93,17 +93,23 @@ object SchemaParser {
 
   sealed trait PermissionExpression
   object PermissionExpression {
-    final case class Leaf(xs: NonEmptyList[String]) extends PermissionExpression
-    final case class BinaryOp(op: PermissionBinOp, lhs: PermissionExpression, rhs: PermissionExpression) extends PermissionExpression
+    final case class Leaf(lhs: String, rhs: Option[String], caret: Caret) extends PermissionExpression
+    final case class BinaryOp(
+        op: PermissionBinOp,
+        lhs: PermissionExpression,
+        rhs: PermissionExpression,
+        caret: Caret
+    ) extends PermissionExpression
   }
 
   lazy val permissionExpression: P[PermissionExpression] = P.defer {
-    lazy val leaf = p(relationName.repSep(P.string("->").backtrack).map(PermissionExpression.Leaf.apply))
+    lazy val leaf = p(P.caret.with1 ~ relationName ~ (P.string("->").backtrack *> relationName).?)
+      .map { case ((c, lhs), rhs) => PermissionExpression.Leaf(lhs, rhs, c) }
 
     def tryBinary(p: P[PermissionExpression]): P[PermissionExpression] =
-      (p ~ (permissionBinOp ~ permissionExpression).?).map {
-        case (lhs, None)            => lhs
-        case (lhs, Some((op, rhs))) => PermissionExpression.BinaryOp(op, lhs, rhs)
+      (p ~ (P.caret.with1 ~ permissionBinOp ~ permissionExpression).?).map {
+        case (lhs, None)                 => lhs
+        case (lhs, Some(((c, op), rhs))) => PermissionExpression.BinaryOp(op, lhs, rhs, c)
       }
 
     tryBinary(leaf) | tryBinary(permissionExpression.between(t('('), t(')')))
@@ -122,13 +128,16 @@ object SchemaParser {
 
   final case class Resource(
       name: String,
-      content: List[ResourceDef]
+      content: List[ResourceDef],
+      caret: Caret
   ) {
     lazy val lookup = content.map(x => x.name -> x).toMap
   }
   val resource: P[Resource] = p {
-    ((definition *> p(resourceName)) ~ resourceDef.rep0.between(t('{'), t('}')))
-      .map { case (name, content) => Resource(name, content) }
+    (
+      P.caret.with1 ~ (definition *> p(resourceName)) ~ resourceDef.rep0.between(t('{'), t('}'))
+    )
+      .map { case ((c, name), content) => Resource(name, content, c) }
   }
 
   val schema: P0[List[Resource]] = {
