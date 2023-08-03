@@ -80,8 +80,13 @@ object Generator extends App {
   }
 
   def resource = q"""
-    trait Resource {
+    trait Spice4sResource {
       def value: String
+      def objectType: Type
+      def ref: ObjectReference = ObjectReference(
+        objectType,
+        Id.unsafeFromString(value)
+      )
     }
   """
 
@@ -211,10 +216,11 @@ object Generator extends App {
       }
     }
 
-    val combined = rds ++ singularCls ++ unionCls
+    val combined = q"def objectType: Type = Type.unsafeFromString(${Lit.String(res.name)})" ::
+      (rds ++ singularCls ++ unionCls)
     List(
       q"""
-          case class ${snake2Type(res.name)}(value: String) extends Resource {
+          case class ${snake2Type(res.name)}(value: String) extends Spice4sResource {
             ..${combined}
           }
     """
