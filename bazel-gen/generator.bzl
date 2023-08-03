@@ -7,7 +7,7 @@ def _new_generator_command(ctx, out_dir, jars):
 
   sep = ";" if ctx.attr.is_windows else ":"
 
-  gen_cmp += " -cp \"{jars}\" {generator_class} {schema} {out_dir}".format(
+  gen_cmp += " -cp \"{jars}\" {generator_class} --schema {schema} --out {out_file}".format(
     java = java_path,
     jars = sep.join(jars),
     generator_class = generator_class,
@@ -19,7 +19,7 @@ def _new_generator_command(ctx, out_dir, jars):
 def _impl(ctx):
   targets = ctx.attr.deps
   jars = [o for t in targets for o in t.outputs if o.endswith(".jar")]
-  out_dir = ctx.actions.declare_directory("%s" % (ctx.attr.name))
+  out_dir = ctx.actions.declare_file("%s" % (ctx.attr.name))
 
   ctx.actions.run_shell(
     inputs = ctx.file.schema,

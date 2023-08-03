@@ -13,7 +13,7 @@ object GeneratorCli
     ) {
 
   val schemaOpt = Opts.option[String]("schema", help = "Path to the schema file", short = "s")
-  val outOpt = Opts.option[String]("out", help = "Path to the output directory", short = "o")
+  val outOpt = Opts.option[String]("out", help = "Path to the output file", short = "o")
 
   override def main: Opts[IO[ExitCode]] =
     (schemaOpt, outOpt).mapN { case (schema, out) =>

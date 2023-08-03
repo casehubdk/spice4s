@@ -282,7 +282,8 @@ object Generator extends App {
         resource
       )
       val all = prefix ++ xs
-      q"..$all".syntax
+      all.map(_.syntax).mkString("\n\n")
+      // q"..$all".syntax
     }
 
   def generateFromTo[F[_]: Files](from: Path, to: Path)(implicit F: Async[F]): F[Option[NonEmptyChain[String]]] =
