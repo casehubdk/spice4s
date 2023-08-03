@@ -76,6 +76,17 @@ lazy val generator = project
       "co.fs2" %% "fs2-core" % "3.7.0",
       "co.fs2" %% "fs2-io" % "3.7.0",
       "org.scalameta" %% "scalameta" % "4.8.6",
-      "org.typelevel" %% "cats-mtl" % "1.3.0",
+      "org.typelevel" %% "cats-mtl" % "1.3.0"
+    )
+  )
+
+lazy val generatorCli = project
+  .in(file("generator-cli"))
+  .dependsOn(generator)
+  .settings(
+    name := "spice4s-generator-cli",
+    libraryDependencies ++= Seq(
+      "com.monovore" %% "decline" % "2.4.1",
+      "com.monovore" %% "decline-effect" % "2.4.1"
     )
   )
