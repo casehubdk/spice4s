@@ -46,6 +46,7 @@ lazy val proto = project
 lazy val client = project
   .in(file("client"))
   .settings(sharedSettings)
+  .dependsOn(proto)
   .settings(
     name := "spice4s-client",
     libraryDependencies ++= Seq(
@@ -53,7 +54,6 @@ lazy val client = project
       "co.fs2" %% "fs2-core" % "3.7.0"
     )
   )
-  .dependsOn(proto)
 
 lazy val parser = project
   .in(file("parser"))
