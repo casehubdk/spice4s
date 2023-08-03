@@ -14,35 +14,68 @@ import scala.util.Failure
 import scala.util.Success
 
 object Generator extends App {
+  final case class Error(message: String, position: Caret)
+
   def convert(ress: List[Resource]) = {
     import Test._
-    val m = ress.flatMap { res =>
-      res.content.map { y =>
-        val here: Solution = y match {
-          case rd: RelationDef =>
-            rd.resources.toList.foldMap { r =>
-              r.relation match {
-                case None | Some(ResourceRelationType.Wildcard) =>
-                  Solution(Set(r.resource), Set.empty, Set.empty)
-                case Some(ResourceRelationType.Relation(rel)) =>
-                  Solution(Set.empty, Set(Rel(r.resource, rel)), Set.empty)
-              }
-            }
-          case pd: PermissionDef =>
-            def go(x: PermissionExpression): Solution =
-              x match {
-                case PermissionExpression.Leaf(lhs, None, _) => Solution(Set.empty, Set(Rel(res.name, lhs)), Set.empty)
-                case PermissionExpression.Leaf(lhs, Some(rhs), _) =>
-                  Solution(Set.empty, Set.empty, Set(Arrow(Rel(res.name, lhs), rhs)))
-                case PermissionExpression.BinaryOp(_, lhs, rhs, _) => go(lhs) |+| go(rhs)
-              }
-            go(pd.expr)
-        }
 
-        Rel(res.name, y.name) -> here
+    val lookup = ress.map(res => res.name -> res).toMap
+
+    def raise[A](msg: String, caret: Caret): ValidatedNec[Error, A] =
+      Error(msg, caret).invalidNec
+
+    def verifyResource(res: String, caret: Caret): ValidatedNec[Error, Resource] =
+      lookup.get(res) match {
+        case Some(x) => x.validNec
+        case None    => raise(s"Resource '$res' is not defined", caret)
       }
-    }.toMap
-    State(m)
+
+    def verifyRelPerm(res: Resource, rel: String, caret: Caret): ValidatedNec[Error, Rel] =
+      res.lookup.get(rel) match {
+        case Some(_) => Rel(res.name, rel).validNec
+        case None    => raise(s"Relation '$rel' is not defined on resource '${res.name}'", caret)
+      }
+
+    def verifyResourceRel(res: String, rel: String, caret: Caret): ValidatedNec[Error, Rel] =
+      verifyResource(res, caret).andThen(res => verifyRelPerm(res, rel, caret))
+
+    ress
+      .flatTraverse { res =>
+        res.content.traverse { y =>
+          val here: ValidatedNec[Error, Solution] = y match {
+            case rd: RelationDef =>
+              rd.resources.toList.foldMapA { r =>
+                r.relation match {
+                  case None | Some(ResourceRelationType.Wildcard) =>
+                    verifyResource(r.resource, r.caret) as
+                      Solution(Set(r.resource), Set.empty, Set.empty)
+                  case Some(ResourceRelationType.Relation(rel)) =>
+                    verifyResourceRel(r.resource, rel, r.caret).map { rel =>
+                      Solution(Set.empty, Set(rel), Set.empty)
+                    }
+                }
+              }
+            case pd: PermissionDef =>
+              def go(x: PermissionExpression): ValidatedNec[Error, Solution] =
+                x match {
+                  case PermissionExpression.Leaf(lhs, None, c) =>
+                    verifyResourceRel(res.name, lhs, c).map { rel =>
+                      Solution(Set.empty, Set(rel), Set.empty)
+                    }
+                  case PermissionExpression.Leaf(lhs, Some(rhs), c) =>
+                    verifyResourceRel(res.name, lhs, c).map { rel =>
+                      Solution(Set.empty, Set.empty, Set(Arrow(rel, rhs)))
+                    }
+                  case PermissionExpression.BinaryOp(_, lhs, rhs, _) =>
+                    go(lhs) |+| go(rhs)
+                }
+              go(pd.expr)
+          }
+
+          here.tupleLeft(Rel(res.name, y.name))
+        }
+      }
+      .map(x => State(x.toMap))
   }
 
   Test.schemas.map { x =>
@@ -51,12 +84,23 @@ object Generator extends App {
       case Left(err) => println(err)
       case Right(ress) =>
         val s = convert(ress)
-        Try(Test.compute(s)) match {
-          case Failure(exception) if exception.getMessage().contains("key not found") => ()
-          case Failure(exception)                                                     => throw exception
-          case Success(value)                                                         => 
-            println(value.xs.values.filter(_.xs.isEmpty))
+        s match {
+          case Validated.Invalid(errs) =>
+            println {
+              errs.foldMap { err =>
+                val (msg, _, _) = spice4s.parser.ParserUtil.showVirtualTextLine(x, err.position.offset)
+                s"${err.message}:\n" + msg + "\n"
+              }
+            }
+          case Validated.Valid(value) =>
             // println(value)
+            Try(Test.compute(value)) match {
+              // case Failure(exception) if exception.getMessage().contains("key not found") => ()
+              case Failure(exception) => throw exception
+              case Success(value) =>
+                println(value.xs.values.filter(_.xs.isEmpty))
+              // println(value)
+            }
         }
     }
   }
@@ -138,7 +182,6 @@ object Generator extends App {
   // final case class Org(value: String) extends Resource
 
   final case class RelationRef(resource: String, relation: String)
-  final case class Error(message: String, position: Option[Caret])
   type RelationCache = Map[RelationRef, Set[String]]
   type CycleSet = Set[RelationRef]
   type Effect[A] = EitherT[StateT[State[RelationCache, *], CycleSet, *], NonEmptyChain[Error], A]
@@ -147,75 +190,75 @@ object Generator extends App {
   val R = Raise[Effect, NonEmptyChain[Error]]
   val Effect = Monad[Effect]
 
-  def raise[A](msg: String, caret: Option[Caret] = None): Effect[A] =
-    R.raise(NonEmptyChain.one(Error(msg, caret)))
+  // def raise[A](msg: String, caret: Option[Caret] = None): Effect[A] =
+  //   R.raise(NonEmptyChain.one(Error(msg, caret)))
 
-  def relationDefTypeclass(resource: String, rd: RelationDef, lookup: Map[String, Resource]) = {
-    def inCached(resource: String, key: RelationRef)(fa: => Effect[List[String]]): Effect[List[String]] =
-      C.inspect(_.contains(key)).flatMap {
-        case true => Effect.pure(List(resource))
-        case false =>
-          S.get.map(_.get(key)).flatMap {
-            case Some(x) => Effect.pure(x.toList)
-            case None    => C.modify(_ + key) *> fa
-          }
-      }
+  // def relationDefTypeclass(resource: String, rd: RelationDef, lookup: Map[String, Resource]) = {
+  //   def inCached(resource: String, key: RelationRef)(fa: => Effect[List[String]]): Effect[List[String]] =
+  //     C.inspect(_.contains(key)).flatMap {
+  //       case true => Effect.pure(List(resource))
+  //       case false =>
+  //         S.get.map(_.get(key)).flatMap {
+  //           case Some(x) => Effect.pure(x.toList)
+  //           case None    => C.modify(_ + key) *> fa
+  //         }
+  //     }
 
-    def getResource(resource: String, caret: Caret): Effect[Resource] =
-      lookup.get(resource) match {
-        case None      => raise(s"resource '${resource}' not found", Some(caret))
-        case Some(res) => Effect.pure(res)
-      }
+  //   def getResource(resource: String, caret: Caret): Effect[Resource] =
+  //     lookup.get(resource) match {
+  //       case None      => raise(s"resource '${resource}' not found", Some(caret))
+  //       case Some(res) => Effect.pure(res)
+  //     }
 
-    // sealed trait Expandable
-    // final case class Perm(x: PermissionExpression) extends Expandable
-    // final case class Rels(resource: String, relation: ResourceRelationType) extends Expandable
+  // sealed trait Expandable
+  // final case class Perm(x: PermissionExpression) extends Expandable
+  // final case class Rels(resource: String, relation: ResourceRelationType) extends Expandable
 
-    // final case class Solution(
-    //     definitions: Set[String],
-    //     expandable: Set[Expandable]
-    // )
-    // object Solution {
-    //   implicit val monoidForSolution: Monoid[Solution] = new Monoid[Solution] {
-    //     def empty: Solution = Solution(Set.empty, Set.empty)
-    //     def combine(x: Solution, y: Solution): Solution =
-    //       Solution(x.definitions | y.definitions, x.expandable | y.expandable)
-    //   }
-    // }
+  // final case class Solution(
+  //     definitions: Set[String],
+  //     expandable: Set[Expandable]
+  // )
+  // object Solution {
+  //   implicit val monoidForSolution: Monoid[Solution] = new Monoid[Solution] {
+  //     def empty: Solution = Solution(Set.empty, Set.empty)
+  //     def combine(x: Solution, y: Solution): Solution =
+  //       Solution(x.definitions | y.definitions, x.expandable | y.expandable)
+  //   }
+  // }
 
-    def goResource(res: Resource, rel: String): Effect[List[String]] =
-      res.lookup.get(rel) match {
-        case Some(rd: RelationDef) => goRelationDef(res.name, rd)
-        case None                  => raise(s"relation '${rel}' not found in resource '${res.name}'", Some(res.caret))
-      }
+  // def goResource(res: Resource, rel: String): Effect[List[String]] =
+  //   res.lookup.get(rel) match {
+  //     case Some(rd: RelationDef) => goRelationDef(res.name, rd)
+  //     case None                  => raise(s"relation '${rel}' not found in resource '${res.name}'", Some(res.caret))
+  //   }
 
-    def goRelationDef(resource: String, rd: RelationDef): Effect[List[String]] = {
-      val key = RelationRef(resource, rd.name)
-      inCached(resource, key) {
-        rd.resources.toList.parFlatTraverse { rr =>
-          getResource(rr.resource, rr.caret).flatMap { res =>
-            rr.relation match {
-              case None | Some(ResourceRelationType.Wildcard) => Effect.pure(List(rr.resource))
-              case Some(ResourceRelationType.Relation(rel))   => goResource(res, rel)
-            }
-          }
-        }
-      }
-    }
+  // def goRelationDef(resource: String, rd: RelationDef): Effect[List[String]] = {
+  //   val key = RelationRef(resource, rd.name)
+  //   inCached(resource, key) {
+  //     rd.resources.toList.parFlatTraverse { rr =>
+  //       getResource(rr.resource, rr.caret).flatMap { res =>
+  //         rr.relation match {
+  //           case None | Some(ResourceRelationType.Wildcard) => Effect.pure(List(rr.resource))
+  //           case Some(ResourceRelationType.Relation(rel))   => goResource(res, rel)
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
 
-    def goPermissionDef(resource: Resource, pd: PermissionDef) = {
-      val key = RelationRef(resource.name, pd.name)
+  // def goPermissionDef(resource: Resource, pd: PermissionDef) = {
+  //   val key = RelationRef(resource.name, pd.name)
 
-      def goPermissionExpression(pe: PermissionExpression) = pe match {
-        case PermissionExpression.Leaf(lhs, None, c)      => getResource(lhs, c).map(_ => List(lhs))
-        case PermissionExpression.Leaf(lhs, Some(rhs), c) =>
+  //   def goPermissionExpression(pe: PermissionExpression) = pe match {
+  //     case PermissionExpression.Leaf(lhs, None, c)      => getResource(lhs, c).map(_ => List(lhs))
+  //     case PermissionExpression.Leaf(lhs, Some(rhs), c) =>
 
-      }
+  //   }
 
-      pd.caret
-    }
+  //   pd.caret
+  // }
 
-    /*
+  /*
     definition organization {
     }
 
@@ -250,12 +293,12 @@ object Generator extends App {
       implicit object AaaaOrganization extends Aaaa[Organization]
       implciit object AaaaHest extends Aaaa[Hest]
     }
-     */
+   */
 
-    // val uniqueTypes = rd.resources.parTraverse { rr =>
-    // }
-    q"sealed trait Hset"
-  }
+  // val uniqueTypes = rd.resources.parTraverse { rr =>
+  // }
+  // q"sealed trait Hset"
+  // }
 
   def relationDefRelation(rd: RelationDef): Defn.Val = {
     val n = Term.Name(rd.name)
@@ -357,9 +400,9 @@ object Test {
   ) {
     override def toString = s"xs: {${xs.mkString(",")}}, rs: {${rs.mkString(",")}}, arrows: {${arrows.mkString(",")}}"
 
-    def arrow(a: String) = Solution(
+    def arrow(a: String, valid: Set[Rel]) = Solution(
       Set.empty,
-      xs.map(x => Rel(x, a)),
+      xs.map(x => Rel(x, a)) & valid,
       rs.map(r => Arrow(r, a))
     )
   }
@@ -396,7 +439,7 @@ object Test {
         }
       } orElse as2.collectFirstSome { case (Arrow(r, a), sol) =>
         val sol2 = s.xs(r)
-        val sol3 = sol2.arrow(a) |+| sol
+        val sol3 = sol2.arrow(a, s.xs.keySet) |+| sol
         if (sol3 != v) {
           // println(k -> (r -> a))
           Some(State(s.xs + (k -> sol3)))
@@ -501,7 +544,9 @@ object Test {
   lazy val schemas = List(
     """
 /** user represents a user */
-definition user {}
+definition user {
+  relation abe: abekat
+}
 
 /** group represents a group **/
 definition group {
