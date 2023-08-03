@@ -123,17 +123,27 @@ object Generator extends App {
     )
   }
 
-  def resourceRelationMethod(relation: String, tpe: Either[Term.Name, String]) =
+  def resourceRelationMethod(relation: String, tpe: Either[Term.Name, String], subjectRelation: Option[String]) = {
+    val sr = subjectRelation match {
+      case None     => q"None"
+      case Some(sr) => q"Some(Relation.unsafeFromString(${Lit.String(sr)}))"
+    }
+    val impl = q"""
+      CheckPermissionRequest(None, ref, ${relationRelationName(relation)}, SubjectReference(that.ref, ${sr}))
+    """
+
+    val n = relation + subjectRelation.foldMap("_" + _)
     tpe match {
       case Right(x) =>
-        q"def ${Term.Name(snake2camel(relation))}(that: ${snake2Type(x)}): CheckPermissionRequest"
+        q"def ${Term.Name(snake2camel(n))}(that: ${snake2Type(x)}): CheckPermissionRequest = $impl"
       case Left(companion) =>
         q"""
-          def ${Term.Name(snake2camel(relation))}[A](
+          def ${Term.Name(snake2camel(n))}[A <: Resource](
             that: A
-          )(implicit ev: ${Type.Select(companion, snake2Type(relation))}): CheckPermissionRequest
+          )(implicit ev: ${Type.Select(companion, snake2Type(relation))}[A]): CheckPermissionRequest = $impl
         """
     }
+  }
 
   import Test._
   def doResource(res: Resource, computed: State) = {
@@ -192,12 +202,12 @@ object Generator extends App {
     val rds = ys.map { case (rd, _, _) => rd.name }.distinct.map { name => relationDefRelation(name) }
 
     val singularCls = singulars.map { case (rd, mr, name) =>
-      resourceRelationMethod(rd.name + mr.subjectRelation.foldMap("_" + _), Right(name))
+      resourceRelationMethod(rd.name, Right(name), mr.subjectRelation)
     }
 
     val unionCls = companionContent.flatMap { case (companionName, nel) =>
       nel.toList.map { case (rd, mr) =>
-        resourceRelationMethod(rd.name + mr.subjectRelation.foldMap("_" + _), Left(companionName))
+        resourceRelationMethod(rd.name, Left(companionName), mr.subjectRelation)
       }
     }
 
