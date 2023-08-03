@@ -365,7 +365,6 @@ object Generator extends App {
         val sol2 = s.xs(r)
         val sol3 = sol2 |+| sol
         if (sol3 != v) {
-          // println(k -> r)
           Some(State(s.xs + (k -> sol3)))
         } else {
           None
@@ -374,7 +373,6 @@ object Generator extends App {
         val sol2 = s.xs(r)
         val sol3 = sol2.arrow(a, s.xs.keySet) |+| sol
         if (sol3 != v) {
-          // println(k -> (r -> a))
           Some(State(s.xs + (k -> sol3)))
         } else {
           None
