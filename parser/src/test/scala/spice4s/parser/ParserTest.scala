@@ -446,7 +446,7 @@ definition user {}
 """,
     """
 definition witharrow {
-    permission arrowed = foo + bar->baz->meh
+    permission arrowed = foo + bar->baz // ->meh
 }definition another {}
 
 /*
