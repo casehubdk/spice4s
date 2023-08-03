@@ -5,7 +5,7 @@ ThisBuild / crossScalaVersions := Seq(scala213Version /*, "3.3.0"*/ )
 ThisBuild / organization := "io.github.casehubdk"
 ThisBuild / organizationName := "CaseHubDK"
 
-ThisBuild / tlBaseVersion := "0.1"
+ThisBuild / tlBaseVersion := "0.0"
 ThisBuild / tlSonatypeUseLegacyHost := false
 
 ThisBuild / tlCiMimaBinaryIssueCheck := false
