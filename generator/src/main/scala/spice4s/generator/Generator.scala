@@ -12,6 +12,7 @@ import scala.annotation.tailrec
 import scala.util.Try
 import scala.util.Failure
 import scala.util.Success
+import scala.collection.immutable
 
 object Generator extends App {
   final case class Error(message: String, position: Caret)
@@ -78,33 +79,7 @@ object Generator extends App {
       .map(x => State(x.toMap))
   }
 
-  Test.schemas.map { x =>
-    val res = spice4s.parser.Parse.parseWith(spice4s.parser.SchemaParser.schema)(x)
-    res match {
-      case Left(err) => println(err)
-      case Right(ress) =>
-        val s = convert(ress)
-        s match {
-          case Validated.Invalid(errs) =>
-            println {
-              errs.foldMap { err =>
-                val (msg, _, _) = spice4s.parser.ParserUtil.showVirtualTextLine(x, err.position.offset)
-                s"${err.message}:\n" + msg + "\n"
-              }
-            }
-          case Validated.Valid(value) =>
-            // println(value)
-            Try(Test.compute(value)) match {
-              // case Failure(exception) if exception.getMessage().contains("key not found") => ()
-              case Failure(exception) => throw exception
-              case Success(value) =>
-                println(value.xs.values.filter(_.xs.isEmpty))
-              // println(value)
-            }
-        }
-    }
-  }
-  def resource: Defn.Trait = q"""
+  def resource = q"""
     trait Resource {
       def value: String
     }
@@ -135,254 +110,144 @@ object Generator extends App {
       case _             => ???
     }
 
-  // def resourceReferenceTrait(rr: ResourceReference, whoReferresToThis: NonEmptyList[String]) = {
-  //   val w = whoReferresToThis.map(snake2Type).map(n => Init(n, Term.Name(""), Seq.empty)).toList
-  //   q"sealed trait ${Type.Name(rr.resource)} extends ..$w"
-  // }
-
-  /*
-   definition user {}
-
-   definition horse {}
-
-   definition org {
-     relation member: user | horse
-   }
-
-   org:acme@member@user:kathryn
-   */
-
-  // object TypeclassExample {
-  //   final case class User(value: String) extends Resource
-
-  //   final case class Horse(value: String) extends Resource
-
-  //   final case class Org(value: String) extends Resource {
-  //     val memberRelation = Relation.unsafeFromString("member")
-
-  //     def member[F[_], A](that: A)(implicit ev: Org.Member[A]): F[Boolean] = {
-  //       ???
-  //     }
-  //   }
-  //   object Org {
-  //     protected trait Member[A]
-  //     implicit object MemberUser extends Member[User]
-  //     implicit object MemberHorse extends Member[Horse]
-  //   }
-
-  //   Org("hey") member User("hest")
-  // }
-
-  // trait Resource {
-  //   def value: String
-  // }
-
-  // final case class User(value: String) extends Resource
-
-  // final case class Org(value: String) extends Resource
-
-  final case class RelationRef(resource: String, relation: String)
-  type RelationCache = Map[RelationRef, Set[String]]
-  type CycleSet = Set[RelationRef]
-  type Effect[A] = EitherT[StateT[State[RelationCache, *], CycleSet, *], NonEmptyChain[Error], A]
-  val S = Stateful[Effect, RelationCache]
-  val C = Stateful[Effect, CycleSet]
-  val R = Raise[Effect, NonEmptyChain[Error]]
-  val Effect = Monad[Effect]
-
-  // def raise[A](msg: String, caret: Option[Caret] = None): Effect[A] =
-  //   R.raise(NonEmptyChain.one(Error(msg, caret)))
-
-  // def relationDefTypeclass(resource: String, rd: RelationDef, lookup: Map[String, Resource]) = {
-  //   def inCached(resource: String, key: RelationRef)(fa: => Effect[List[String]]): Effect[List[String]] =
-  //     C.inspect(_.contains(key)).flatMap {
-  //       case true => Effect.pure(List(resource))
-  //       case false =>
-  //         S.get.map(_.get(key)).flatMap {
-  //           case Some(x) => Effect.pure(x.toList)
-  //           case None    => C.modify(_ + key) *> fa
-  //         }
-  //     }
-
-  //   def getResource(resource: String, caret: Caret): Effect[Resource] =
-  //     lookup.get(resource) match {
-  //       case None      => raise(s"resource '${resource}' not found", Some(caret))
-  //       case Some(res) => Effect.pure(res)
-  //     }
-
-  // sealed trait Expandable
-  // final case class Perm(x: PermissionExpression) extends Expandable
-  // final case class Rels(resource: String, relation: ResourceRelationType) extends Expandable
-
-  // final case class Solution(
-  //     definitions: Set[String],
-  //     expandable: Set[Expandable]
-  // )
-  // object Solution {
-  //   implicit val monoidForSolution: Monoid[Solution] = new Monoid[Solution] {
-  //     def empty: Solution = Solution(Set.empty, Set.empty)
-  //     def combine(x: Solution, y: Solution): Solution =
-  //       Solution(x.definitions | y.definitions, x.expandable | y.expandable)
-  //   }
-  // }
-
-  // def goResource(res: Resource, rel: String): Effect[List[String]] =
-  //   res.lookup.get(rel) match {
-  //     case Some(rd: RelationDef) => goRelationDef(res.name, rd)
-  //     case None                  => raise(s"relation '${rel}' not found in resource '${res.name}'", Some(res.caret))
-  //   }
-
-  // def goRelationDef(resource: String, rd: RelationDef): Effect[List[String]] = {
-  //   val key = RelationRef(resource, rd.name)
-  //   inCached(resource, key) {
-  //     rd.resources.toList.parFlatTraverse { rr =>
-  //       getResource(rr.resource, rr.caret).flatMap { res =>
-  //         rr.relation match {
-  //           case None | Some(ResourceRelationType.Wildcard) => Effect.pure(List(rr.resource))
-  //           case Some(ResourceRelationType.Relation(rel))   => goResource(res, rel)
-  //         }
-  //       }
-  //     }
-  //   }
-  // }
-
-  // def goPermissionDef(resource: Resource, pd: PermissionDef) = {
-  //   val key = RelationRef(resource.name, pd.name)
-
-  //   def goPermissionExpression(pe: PermissionExpression) = pe match {
-  //     case PermissionExpression.Leaf(lhs, None, c)      => getResource(lhs, c).map(_ => List(lhs))
-  //     case PermissionExpression.Leaf(lhs, Some(rhs), c) =>
-
-  //   }
-
-  //   pd.caret
-  // }
-
-  /*
-    definition organization {
+  def resourceRelationTrait(relation: String, possibleTypes: NonEmptyList[String]) = {
+    val traitName = snake2Type(relation)
+    val pts = possibleTypes.map { pt =>
+      val ext = Init(Type.Apply(traitName, Type.ArgClause(List(snake2Type(pt)))), Name.Anonymous(), Seq.empty)
+      q"implicit object ${snake2Obj(relation.capitalize + "_" + pt.capitalize)} extends $ext"
     }
 
-    definition user {
-      relation org = organization
+    NonEmptyList(
+      q"sealed trait ${traitName}[A]",
+      pts.toList
+    )
+  }
+
+  def resourceRelationMethod(relation: String, tpe: Either[Term.Name, String]) =
+    tpe match {
+      case Right(x) =>
+        q"def ${Term.Name(snake2camel(relation))}(that: ${snake2Type(x)}): CheckPermissionRequest"
+      case Left(companion) =>
+        q"""
+          def ${Term.Name(snake2camel(relation))}[A](
+            that: A
+          )(implicit ev: ${Type.Select(companion, snake2Type(relation))}): CheckPermissionRequest
+        """
     }
 
-    definition hest {
-      relation uuuu = user | organization
+  import Test._
+  def doResource(res: Resource, computed: State) = {
+    final case class MakeRelation(
+        name: String,
+        possibleTypes: NonEmptyList[String],
+        subjectRelation: Option[String]
+    )
+    val zs = res.content.flatMap { rd =>
+      val mrs = rd match {
+        case r: RelationDef =>
+          val pureResources = r.resources
+            .collect { case ResourceReference(resource, None, _) => resource }
+          val labelledEdges = r.resources
+            .collect { case ResourceReference(resource, Some(ResourceRelationType.Relation(label)), _) =>
+              label -> resource
+            }
+            .groupMap { case (k, _) => k } { case (_, v) => v }
 
-      permission aaaa = uuuu->org + aaaa->org + uuuu + hest->org
+          pureResources.toNel.toList.map(nel => MakeRelation(rd.name, nel, None)) ++
+            labelledEdges.toList
+              .collect { case (sr, x :: xs) => MakeRelation(rd.name, NonEmptyList(x, xs), Some(sr)) }
+        case pd: PermissionDef =>
+          computed.lookup(res.name, pd.name).toNel.toList.map { nel =>
+            MakeRelation(pd.name, nel, None)
+          }
+      }
+
+      mrs tupleLeft rd
     }
 
-    final case class Organization(value: String)
-
-    final case class User(value: String) {
-      def org[F[_]](o: Organization): F[Boolean] = ???
+    val ys = zs.map { case (rd, mr) =>
+      mr.possibleTypes match {
+        case NonEmptyList(head, Nil) => (rd, mr, Option(head))
+        case _                       => (rd, mr, none)
+      }
     }
 
-    final caes class Hest(value: String) {
-      def uuuu[F[_], A](a: A)(implicit ev: Hest.Uuuu[A]): F[Boolean] = ???
-
-      def aaaa[F[_], A](a: A)(implicit ev: Hest.Aaaa[A]): F[Boolean] = ???
+    val companionContent = ys.collect { case (rd, mr, None) => rd -> mr }.toNel.toList.map { nel =>
+      snake2Obj(res.name) -> nel
     }
-    object Hest {
-      sealed trait Uuuu[A]
-      implicit object UuuuUser extends Uuuu[User]
-      implicit object UuuuOrganization extends Uuuu[Organization]
 
-      sealed trait Aaaa[A]
-      implicit object AaaaUser extends Aaaa[User]
-      implicit object AaaaOrganization extends Aaaa[Organization]
-      implciit object AaaaHest extends Aaaa[Hest]
+    val c: List[Defn.Object] = companionContent.map { case (objName, nel) =>
+      val members = nel.flatMap { case (rd, mr) =>
+        resourceRelationTrait(rd.name + mr.subjectRelation.foldMap("_" + _), mr.possibleTypes)
+      }
+      q"""
+      object ${objName} {
+        ..${members.toList}
+      }
+      """
     }
-   */
 
-  // val uniqueTypes = rd.resources.parTraverse { rr =>
-  // }
-  // q"sealed trait Hset"
-  // }
+    val singulars = ys.collect { case (rd, mr, Some(t)) => (rd, mr, t) }
 
-  def relationDefRelation(rd: RelationDef): Defn.Val = {
-    val n = Term.Name(rd.name)
-    val defName = Term.Name(n.value + "Relation")
+    val rds = ys.map { case (rd, _, _) => rd.name }.distinct.map { name => relationDefRelation(name) }
+
+    val singularCls = singulars.map { case (rd, mr, name) =>
+      resourceRelationMethod(rd.name + mr.subjectRelation.foldMap("_" + _), Right(name))
+    }
+
+    val unionCls = companionContent.flatMap { case (companionName, nel) =>
+      nel.toList.map { case (rd, mr) =>
+        resourceRelationMethod(rd.name + mr.subjectRelation.foldMap("_" + _), Left(companionName))
+      }
+    }
+
+    val combined = rds ++ singularCls ++ unionCls
+    List(
+      q"""
+          case class ${snake2Type(res.name)}(value: String) extends Resource {
+            ..${combined}
+          }
+    """
+    ) ++ c
+  }
+
+  def relationRelationName(rd: String): Term.Name =
+    Term.Name(snake2camel(rd + "Relation"))
+
+  def relationDefRelation(rd: String): Defn.Val = {
+    val n = Lit.String(rd)
+    val defName = relationRelationName(rd)
     q"val ${Pat.Var(defName)} = Relation.unsafeFromString($n)"
   }
 
-  // println(resourceReferenceTrait(ResourceReference("")))
+  def convertSchema(schema: String) = {
+    val res = spice4s.parser.Parse.parseWith(spice4s.parser.SchemaParser.schema)(schema)
 
-  // println(definitionReference("hest/hest").syntax)
-
-  // def hesteInits = List(init"Resource", init"Resource2(hest)")
-
-  // def definition(
-  //     name: String,
-  //     exts: List[Init]
-  //     // partOf: List[String],
-  //     // relations: List[(String, Non
-
-  // ): Defn.Class = q"""
-  // final case class ${Type.Name(name)}(value: String) extends ..$exts with Resource {
-  // }
-  // """
-
-  // def relation(rd: RelationDef) = q"""
-  // def ${Type.Name(rd.name)}(that: )
-  // """
-
-  // println(definition("Hest", List(init"A.B")))
-
-  // def object
-}
-
-object S {
-
-  trait Cont[A]
-  case class Type[A](fields: List[Field[A, ?]]) extends Cont[A]
-  case object Leaf extends Cont[String]
-
-  trait Attribute[A, B]
-  case class Field[A, B](f: A => B, cont: Cont[B], attributes: List[Attribute[A, B]] = Nil)
-
-  case class Entity(name: String)
-
-  val entity = Type[Entity](
-    List(
-      Field[Entity, String](_.name, Leaf)
-    )
-  )
-
-  case class Contract(name: String, entity: Entity)
-
-  val contract = Type[Contract](
-    List(
-      Field[Contract, String](_.name, Leaf),
-      Field[Contract, Entity](_.entity, entity)
-    )
-  )
-
-  trait QueryAttribute[A, B] {
-    type F[A]
-    type A
-    def queryFragment: QueryFragment[F, A]
+    res match {
+      case Left(err) => err.leftNec
+      case Right(ress) =>
+        val s = convert(ress)
+        s match {
+          case Validated.Invalid(errs) =>
+            errs.map { err =>
+              val (msg, _, _) = spice4s.parser.ParserUtil.showVirtualTextLine(schema, err.position.offset)
+              s"${err.message}:\n" + msg + "\n"
+            }.asLeft
+          case Validated.Valid(state) =>
+            val computed = compute(state)
+            ress.flatMap(doResource(_, computed)).asRight
+        }
+    }
   }
 
-  sealed trait QueryFragment[F[_], A]
-  object QueryFragment {
-    sealed trait JoinType[F[_]]
-    object JoinType {
-      case object One extends JoinType[Lambda[X => X]]
-      case object Opt extends JoinType[Option]
+  def generate(schema: String) =
+    convertSchema(schema).map { xs =>
+      val all = resource :: xs
+      q"..$all".syntax
     }
 
-    case class Join[F[_]](
-        table: String,
-        on: String => String,
-        jt: JoinType[F]
-    ) extends QueryFragment[F, String]
-
-    case class FlatMap[F[_], G[_], A, B](
-        fa: QueryFragment[F, A],
-        f: A => QueryFragment[G, B]
-    ) extends QueryFragment[Lambda[X => F[G[X]]], B]
-  }
+  println(generate(Test.schemas(2)))
+  println(init"Hest[String]".structure)
 }
 
 object Test {
@@ -464,6 +329,12 @@ object Test {
   final case class State(xs: Map[Rel, Solution]) {
     override def toString =
       s"State(\n${xs.map { case (k, v) => s"$k -> $v" }.map("\t" + _).mkString("\n")})"
+
+    def lookup(resource: String, rel: String): List[String] =
+      xs.get(Rel(resource, rel)).foldMap(_.xs).toList
+
+    // lazy val grouped: Map[String, immutable.Iterable[Solution]] =
+    //   xs.groupMap { case (k, _) => k.d } { case (_, v) => v }
   }
 
   /*
@@ -587,6 +458,7 @@ definition group {
 definition platform {
 	relation administrator: user
 	permission super_admin = administrator
+  relation custom: user | platform | resource#owner | user#owner
 }
 
 definition organization {
@@ -599,7 +471,9 @@ definition resource {
 	permission admin = owner + owner->admin
 }
 
-definition user {}
+definition user {
+  relation owner: user
+}
 """,
     """
 definition user {}
