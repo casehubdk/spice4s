@@ -1,5 +1,7 @@
 package spice4s.generator
 
+import cats.effect.{Resource => _, _}
+import fs2.io.file._
 import cats._
 import cats.implicits._
 import scala.meta._
@@ -242,16 +244,63 @@ object Generator extends App {
             }.asLeft
           case Validated.Valid(state) =>
             val computed = compute(state)
-            ress.flatMap(doResource(_, computed)).asRight
+            val namespaced = ress.map { res =>
+              val parts = res.name.split("/")
+              val namespace =
+                if (parts.size > 1) parts.headOption
+                else None
+              namespace -> res
+            }
+            namespaced
+              .groupMap { case (ns, _) => ns } { case (_, res) => res }
+              .toList
+              .flatMap { case (ns, ress) =>
+                val body = ress.flatMap(doResource(_, computed))
+
+                ns match {
+                  case None => body
+                  case Some(ns) =>
+                    List(
+                      q"""
+                        object ${snake2Obj(ns)} {
+                          ..$body
+                        }
+                      """
+                    )
+                }
+              }
+              .asRight
         }
     }
   }
 
-  def generate(schema: String) =
+  def generate(schema: String): EitherNec[String, String] =
     convertSchema(schema).map { xs =>
-      val all = resource :: xs
+      val prefix = List(
+        q"package spice4s.generated",
+        q"import spice4s.client.models._",
+        resource
+      )
+      val all = prefix ++ xs
       q"..$all".syntax
     }
+
+  def generateFromTo[F[_]: Files](from: Path, to: Path)(implicit F: Async[F]): F[Option[NonEmptyChain[String]]] =
+    Files[F]
+      .readUtf8(from)
+      .compile
+      .string
+      .map(generate)
+      .flatMap {
+        case Left(err) => F.pure(Some(err))
+        case Right(output) =>
+          fs2
+            .Stream(output)
+            .through(fs2.text.utf8.encode[F])
+            .through(Files[F].writeAll(to))
+            .compile
+            .drain as none
+      }
 
   final case class Rel(d: String, r: String) {
     def ->(r2: String): Arrow = Arrow(this, r2)
