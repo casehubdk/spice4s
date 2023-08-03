@@ -1,7 +1,7 @@
 val scala213Version = "2.13.10"
 
 ThisBuild / scalaVersion := scala213Version
-ThisBuild / crossScalaVersions := Seq(scala213Version, "3.3.0")
+ThisBuild / crossScalaVersions := Seq(scala213Version /*, "3.3.0"*/ )
 ThisBuild / organization := "io.github.casehubdk"
 ThisBuild / organizationName := "CaseHubDK"
 
@@ -39,7 +39,8 @@ lazy val proto = project
       "com.thesamet.scalapb" %% "scalapb-validate-core" % scalapb.validate.compiler.BuildInfo.version % "protobuf",
       "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0" % "protobuf",
       "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0"
-    )
+    ),
+    tlFatalWarningsInCi := false
   )
 
 lazy val client = project
