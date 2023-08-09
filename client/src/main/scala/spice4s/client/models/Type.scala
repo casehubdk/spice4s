@@ -22,7 +22,7 @@ import cats.implicits._
 sealed abstract case class Type private (value: String)
 
 object Type {
-  val validationRegex = "^([a-z][a-z0-9_]{1,61}[a-z0-9]/)?[a-z][a-z0-9_]{1,62}[a-z0-9]$".r
+  val validationRegex = "^([a-z][a-z0-9_]{1,61}[a-z0-9]/)*[a-z][a-z0-9_]{1,62}[a-z0-9]$".r
 
   def unsafeFromString(value: String): Type = new Type(value) {}
 
