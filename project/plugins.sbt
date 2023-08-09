@@ -7,3 +7,5 @@ libraryDependencies ++= Seq(
   "com.thesamet.scalapb" %% "compilerplugin" % "0.11.11",
   "com.thesamet.scalapb" %% "scalapb-validate-codegen" % "0.3.4"
 )
+
+addDependencyTreePlugin

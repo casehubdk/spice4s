@@ -26,5 +26,5 @@ object Limit {
 
   def apply(value: Int): Validation[Limit] =
     if (value >= 0 || value <= 1000) unsafeFromString(value).valid
-    else invalid("limit", value, "Limit must be between 0 and 1000")
+    else invalid("limit", "Limit must be between 0 and 1000")
 }

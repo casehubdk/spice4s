@@ -28,7 +28,8 @@ object ZedToken {
   def unsafeFromString(token: String): ZedToken = new ZedToken(token) {}
 
   def apply(token: String): Validation[ZedToken] =
-    unsafeFromString(token).validator(_.encode)
+    if (token.size >= 1) unsafeFromString(token).valid
+    else invalid("zed-token", "ZedToken must be at least 1 character long")
 
   def decode(x: core.ZedToken): Decoded[Option[ZedToken]] =
     opt(x.token).map(unsafeFromString).pure[Decoded]

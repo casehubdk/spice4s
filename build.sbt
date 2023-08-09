@@ -32,15 +32,20 @@ lazy val proto = project
   .enablePlugins(Fs2Grpc)
   .settings(
     name := "spice4s-client-proto-api",
-    scalapbCodeGenerators := scalapbCodeGenerators.value ++ Seq(
+    scalapbCodeGenerators := scalapbCodeGenerators.value/* ++ Seq(
       protocbridge.Target(scalapb.validate.gen(), (Compile / sourceManaged).value / "scalapb")
-    ),
+    )*/,
     libraryDependencies ++= Seq(
-      "com.thesamet.scalapb" %% "scalapb-validate-core" % scalapb.validate.compiler.BuildInfo.version % "protobuf",
+      /* "com.thesamet.scalapb" %% "scalapb-validate-core" % scalapb.validate.compiler.BuildInfo.version % "protobuf", */
+      "com.thesamet.scalapb.common-protos" %% "pgv-proto-scalapb_0.11" % "0.6.13-0",
+      "com.thesamet.scalapb.common-protos" %% "pgv-proto-scalapb_0.11" % "0.6.13-0" % "protobuf",
       "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0" % "protobuf",
       "com.thesamet.scalapb.common-protos" %% "proto-google-common-protos-scalapb_0.11" % "2.9.6-0"
     ),
-    tlFatalWarningsInCi := false
+    tlFatalWarningsInCi := false,
+    excludeDependencies ++= Seq(
+      ExclusionRule("com.thesamet.scalapb", "scalapb-validate-core_2.13"),
+    )
   )
 
 lazy val client = project

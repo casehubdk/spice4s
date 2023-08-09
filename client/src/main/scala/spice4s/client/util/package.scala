@@ -17,34 +17,36 @@
 package spice4s.client
 
 import cats._
-import scalapb.validate._
 import cats.data._
 import cats.implicits._
 import scala.util.matching.Regex
 import cats.ApplicativeError
 
 package object util {
+  final case class ValidationFailure(name: String, message: String)
+
   implicit class AnyUtilOps[A](private val value: A) {
-    def validator[V: Validator](f: A => V): Validated[List[ValidationFailure], A] =
-      Validator[V].validate(f(value)) match {
-        case Failure(violations) => violations.invalid
-        case Success             => value.valid
-      }
+    def minSize(size: Int)(f: A => String): Validated[List[ValidationFailure], A] =
+      if (f(value).length >= size) value.valid
+      else
+        invalid(
+          "min-size-field",
+          s"'$value' with encoded value ${f(value)} is less than min size $size"
+        )
 
     def validateRegex(regex: Regex)(f: A => String): Validated[List[ValidationFailure], A] =
       if (regex.matches(f(value))) value.valid
       else
         invalid(
           "regex-field",
-          f(value),
           s"$value with encoded value ${f(value)} does not match regex ${regex.toString}"
         )
   }
 
   type Validation[A] = Validated[List[ValidationFailure], A]
 
-  def invalid[A](name: String, a: Any, reason: String): Validation[A] =
-    List(ValidationFailure(name, a.toString, reason)).invalid
+  def invalid[A](name: String, message: String): Validation[A] =
+    List(ValidationFailure(name, message)).invalid
 
   final case class DecoderError(message: String, path: Chain[String]) {
     def prepend(p: String): DecoderError = copy(path = p +: path)
