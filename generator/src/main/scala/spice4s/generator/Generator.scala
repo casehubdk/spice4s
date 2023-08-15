@@ -89,16 +89,23 @@ object Generator extends App {
       .map(x => State(x.toMap))
   }
 
-  def resource = q"""
-    trait Spice4sResource {
-      def value: String
+  def resourceHeaders = List(
+    q"""
+    trait Spice4sResourceConstants {
       def objectType: Type
+    }
+    """,
+    q"""
+    trait Spice4sResource {
+      def constants: Spice4sResourceConstants
+      def value: String
       def ref: ObjectReference = ObjectReference(
-        objectType,
+        constants.objectType,
         Id.unsafeFromString(value)
       )
     }
   """
+  )
 
   def snake2camel(x: String) = {
     val xs = x.split("_")
@@ -128,7 +135,7 @@ object Generator extends App {
   def resourceRelationTrait(relation: String, possibleTypes: NonEmptyList[String]) = {
     val traitName = snake2Type(relation)
     val pts = possibleTypes.map { pt =>
-      val ext = Init(Type.Apply(traitName, Type.ArgClause(List(snake2Type(pt)))), Name.Anonymous(), Seq.empty)
+      val ext = Init(Type.Apply(traitName, Type.ArgClause(List(definitionTypeReference(pt)))), Name.Anonymous(), Seq.empty)
       q"implicit object ${snake2Obj(relation.capitalize + "_" + pt.capitalize)} extends $ext"
     }
 
@@ -150,7 +157,7 @@ object Generator extends App {
     val n = relation + subjectRelation.foldMap("_" + _)
     tpe match {
       case Right(x) =>
-        q"def ${Term.Name(snake2camel(n))}(that: ${snake2Type(x)}): CheckPermissionRequest = $impl"
+        q"def ${Term.Name(snake2camel(n))}(that: ${definitionTypeReference(x)}): CheckPermissionRequest = $impl"
       case Left(companion) =>
         q"""
           def ${Term.Name(snake2camel(n))}[A <: Resource](
@@ -196,17 +203,19 @@ object Generator extends App {
       }
     }
 
-    val companionContent = ys.collect { case (rd, mr, None) => rd -> mr }.toNel.toList.map { nel =>
-      snake2Obj(res.name) -> nel
-    }
+    val objName = snake2Obj(res.name)
 
-    val c: List[Defn.Object] = companionContent.map { case (objName, nel) =>
-      val members = nel.flatMap { case (rd, mr) =>
-        resourceRelationTrait(rd.name + mr.subjectRelation.foldMap("_" + _), mr.possibleTypes)
+    val companionContent = ys.collect { case (rd, mr, None) => rd -> mr }
+
+    val companion: Defn.Object = {
+      val objType = q"def objectType: Type = Type.unsafeFromString(${Lit.String(res.name)})"
+
+      val members = objType :: companionContent.flatMap { case (rd, mr) =>
+        resourceRelationTrait(rd.name + mr.subjectRelation.foldMap("_" + _), mr.possibleTypes).toList
       }
       q"""
-      object ${objName} {
-        ..${members.toList}
+      object ${objName} extends Spice4sResourceConstants {
+        ..${members}
       }
       """
     }
@@ -219,13 +228,11 @@ object Generator extends App {
       resourceRelationMethod(rd.name, Right(name), mr.subjectRelation)
     }
 
-    val unionCls = companionContent.flatMap { case (companionName, nel) =>
-      nel.toList.map { case (rd, mr) =>
-        resourceRelationMethod(rd.name, Left(companionName), mr.subjectRelation)
-      }
+    val unionCls = companionContent.map { case (rd, mr) =>
+      resourceRelationMethod(rd.name, Left(objName), mr.subjectRelation)
     }
 
-    val combined = q"def objectType: Type = Type.unsafeFromString(${Lit.String(res.name)})" ::
+    val combined = q"def constants: Spice4sResourceConstants = ${objName}" ::
       (rds ++ singularCls ++ unionCls)
     List(
       q"""
@@ -233,7 +240,7 @@ object Generator extends App {
             ..${combined}
           }
     """
-    ) ++ c
+    ) ++ List(companion)
   }
 
   def relationRelationName(rd: String): Term.Name =
@@ -262,10 +269,10 @@ object Generator extends App {
             val computed = compute(state)
             val namespaced = ress.map { res =>
               val parts = res.name.split("/")
-              val namespace =
-                if (parts.size > 1) parts.headOption
-                else None
-              namespace -> res
+              parts.toList match {
+                case ns :: name :: Nil => (Some(ns) -> res.copy(name = name))
+                case _                 => (None -> res)
+              }
             }
             namespaced
               .groupMap { case (ns, _) => ns } { case (_, res) => res }
@@ -294,9 +301,8 @@ object Generator extends App {
     convertSchema(schema).map { xs =>
       val prefix = List(
         q"package spice4s.generated",
-        q"import spice4s.client.models._",
-        resource
-      )
+        q"import spice4s.client.models._"
+      ) ++ resourceHeaders
       val all = prefix ++ xs
       all.map(_.syntax).mkString("\n\n")
     // q"..$all".syntax
