@@ -68,6 +68,14 @@ lazy val generatorCore = project
     name := "spice4s-generator-core",
   )
 
+lazy val encoder = project
+  .in(file("encoder"))
+  .settings(sharedSettings)
+  .dependsOn(client)
+  .settings(
+    name := "spice4s-encoder",
+  )
+
 lazy val parser = project
   .in(file("parser"))
   .settings(sharedSettings)
