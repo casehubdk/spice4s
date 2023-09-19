@@ -1,7 +1,6 @@
-package generator.core
+package spice4s.generator.core
 
 import spice4s.client.models._
-import scala.annotation.unused
 
 trait Spice4sResource {
   def constants: Spice4sResourceConstants[?]

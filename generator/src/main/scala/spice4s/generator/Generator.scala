@@ -205,12 +205,18 @@ object Generator extends App {
     val companionContent = ys.collect { case (rd, mr, None) => rd -> mr }
 
     val companion: Defn.Object = {
-      val members = companionContent.flatMap { case (rd, mr) =>
+      val constants = q"""
+        implicit def constants: Spice4sResourceConstants[$caseClassName] = 
+          new Spice4sResourceConstants[$caseClassName] {
+            def objectType: Type = Type.unsafeFromString(${Lit.String(res.name)})
+          }
+      """
+
+      val members = constants :: companionContent.flatMap { case (rd, mr) =>
         resourceRelationTrait(rd.name + mr.subjectRelation.foldMap("_" + _), mr.possibleTypes).toList
       } ++ ys.map { case (rd, _, _) => rd.name }.distinct.map(relationDefCompanion)
       q"""
-        implicit object ${objName} extends Spice4sResourceConstants[$caseClassName] {
-          def objectType: Type = Type.unsafeFromString(${Lit.String(res.name)})
+        object ${objName} {
           ..${members}
         }
       """
@@ -226,11 +232,11 @@ object Generator extends App {
       resourceRelationMethod(caseClassName, objName, rd.name, Left(objName), mr.subjectRelation)
     }
 
-    val combined = q"def constants: Spice4sResourceConstants[$caseClassName] = ${objName}" ::
+    val combined = q"def constants: Spice4sResourceConstants[$caseClassName] = ${objName}.constants" ::
       (singularCls ++ unionCls)
     List(
       q"""
-        case class $caseClassName(value: String) extends Spice4sResource {
+        case class $caseClassName(id: Id) extends Spice4sResource {
             ..${combined}
           }
       """
