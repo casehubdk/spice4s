@@ -60,6 +60,14 @@ lazy val client = project
     )
   )
 
+lazy val generatorCore = project
+  .in(file("generator-core"))
+  .settings(sharedSettings)
+  .dependsOn(client)
+  .settings(
+    name := "spice4s-generator-core",
+  )
+
 lazy val parser = project
   .in(file("parser"))
   .settings(sharedSettings)

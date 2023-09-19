@@ -89,79 +89,6 @@ object Generator extends App {
       .map(x => State(x.toMap))
   }
 
-  def resourceHeaders = List(
-    q"""
-    trait Spice4sResourceConstants[A <: Spice4sResource] {
-      def objectType: Type
-    }
-    """,
-    q"""
-    trait Spice4sResource {
-      def constants: Spice4sResourceConstants[?]
-      def value: String
-      def ref: ObjectReference = ObjectReference(
-        constants.objectType,
-        Id.unsafeFromString(value)
-      )
-    }
-    """,
-    q"""
-    trait Spice4sRelation {
-      def relation: Relation
-    }
-    """,
-    q"""
-    case class PermissionRequest[Res <: Spice4sResource, Rel <: Spice4sRelation, Sub <: Spice4sResource](
-      res: Res,
-      rel: Rel,
-      sub: Sub,
-      subjectRelation: Option[Relation]
-    ) {
-      def request: CheckPermissionRequest = CheckPermissionRequest(
-        None,
-        res.ref,
-        rel.relation,
-        SubjectReference(sub.ref, subjectRelation)
-      )
-    }
-    """
-  )
-
-  def relationPermHeaders = List(
-    // q"""
-    // trait Spice4sRelation {
-    //   def resource: Type
-    //   def relation: Relation
-    //   def subject: Type
-    //   def subjectRelation: Option[Relation]
-    //   def apply(res: Spice4sResource, sub: Spice4sResource): CheckPermissionRequest =
-    //     CheckPermissionRequest(
-    //       None,
-    //       res.ref,
-    //       relation,
-    //       SubjectReference(sub.ref, subjectRelation)
-    //     )
-    // }
-    // """,
-    // q"""
-    // trait Spice4sUnaryRelation[A <: Spice4sResource, B <: Spice4sResource] extends Spice4sRelation {
-    //   def apply(a: A, b: B): CheckPermissionRequest = rel(a, b)
-    // }
-    // """,
-    // q"""
-    // trait Spice4sNaryRelation[A <: Spice4sResource, Typeclass[_]] extends Spice4sRelation {
-    //   def apply[B](a: A, b: B)(implicit ev: Typeclass[B]): CheckPermissionRequest = rel(a, b)
-    // }
-    // """
-  )
-
-  // Static inspectable structure
-  // Case.invite.apply : Case => User => CheckPermissionRequest
-  // checkPermission(tpe)(Case.invite, a => Case(a.caseId.toString()))
-  //
-  // invite function returns an intact structure
-  // checkPermission(tpe)(a => Case(a.caseId.toString()) invite _)
-
   def snake2camel(x: String) = {
     val xs = x.split("_")
     xs.headOption.mkString ++ xs.tail.toList.foldMap(_.capitalize)
@@ -200,8 +127,6 @@ object Generator extends App {
     )
   }
 
-  // def staticRelation(resource: String, relation: String, subject: Either[Term.Name, String])
-
   def resourceRelationMethod(
       thisType: Type.Name,
       companion: Term.Name,
@@ -231,9 +156,8 @@ object Generator extends App {
         q"""
           def ${Term.Name(snake2camel(n))}[A <: Spice4sResource](
             that: A
-          )(implicit ev: ${Type.Select(companion, snake2Type(relation))}[A]): PermissionRequest[$thisType, $relTpe, $thatType] = ${impl(
-          thatType
-        )}
+          )(implicit ev: ${Type.Select(companion, snake2Type(relation))}[A]): PermissionRequest[$thisType, $relTpe, $thatType] = 
+            ${impl(thatType)}
         """
     }
   }
@@ -281,25 +205,18 @@ object Generator extends App {
     val companionContent = ys.collect { case (rd, mr, None) => rd -> mr }
 
     val companion: Defn.Object = {
-      val constants = q"""
-      implicit val constants: Spice4sResourceConstants[$caseClassName] = new Spice4sResourceConstants[$caseClassName] {
-        def objectType: Type = Type.unsafeFromString(${Lit.String(res.name)})
-      }
-      """
-
-      val members = constants :: companionContent.flatMap { case (rd, mr) =>
+      val members = companionContent.flatMap { case (rd, mr) =>
         resourceRelationTrait(rd.name + mr.subjectRelation.foldMap("_" + _), mr.possibleTypes).toList
       } ++ ys.map { case (rd, _, _) => rd.name }.distinct.map(relationDefCompanion)
       q"""
-      object ${objName} {
-        ..${members}
-      }
+        implicit object ${objName} extends Spice4sResourceConstants[$caseClassName] {
+          def objectType: Type = Type.unsafeFromString(${Lit.String(res.name)})
+          ..${members}
+        }
       """
     }
 
     val singulars = ys.collect { case (rd, mr, Some(t)) => (rd, mr, t) }
-
-    // val rds = ys.map { case (rd, _, _) => rd.name }.distinct.map { name => relationDefRelation(name) }
 
     val singularCls = singulars.map { case (rd, mr, name) =>
       resourceRelationMethod(caseClassName, objName, rd.name, Right(name), mr.subjectRelation)
@@ -309,14 +226,14 @@ object Generator extends App {
       resourceRelationMethod(caseClassName, objName, rd.name, Left(objName), mr.subjectRelation)
     }
 
-    val combined = q"def constants: Spice4sResourceConstants[$caseClassName] = ${objName}.constants" ::
-      (/*rds ++ */ singularCls ++ unionCls)
+    val combined = q"def constants: Spice4sResourceConstants[$caseClassName] = ${objName}" ::
+      (singularCls ++ unionCls)
     List(
       q"""
         case class $caseClassName(value: String) extends Spice4sResource {
             ..${combined}
           }
-    """
+      """
     ) ++ List(companion)
   }
 
@@ -327,9 +244,9 @@ object Generator extends App {
     val n = Lit.String(rd)
     val defName = relationCompanionName(rd)
     q"""
-    implicit object ${defName} extends Spice4sRelation {
-      def relation = Relation.unsafeFromString($n)
-    }
+      implicit object ${defName} extends Spice4sRelation {
+        def relation = Relation.unsafeFromString($n)
+      }
     """
   }
 
@@ -382,11 +299,11 @@ object Generator extends App {
     convertSchema(schema).map { xs =>
       val prefix = List(
         q"package spice4s.generated",
-        q"import spice4s.client.models._"
-      ) ++ resourceHeaders ++ relationPermHeaders
+        q"import spice4s.client.models._",
+        q"import spice4s.generator.core._"
+      )
       val all = prefix ++ xs
       all.map(_.syntax).mkString("\n\n")
-    // q"..$all".syntax
     }
 
   def generateFromTo[F[_]: Files](from: Path, to: Path)(implicit F: Async[F]): F[Option[NonEmptyChain[String]]] =
