@@ -74,6 +74,21 @@ case class Other(...
 object Generator extends App {
   final case class Error(message: String, position: Caret)
 
+    case class ResourceId(
+      name: String,
+      namespace: Option[String]
+    ) {
+      def combined = namespace.foldMap(_ + "_") + name
+      def idName = combined + "_id"
+      def typename: Type.Name = snake2Type(idName)
+      def typeclass: Term.Name = Term.Name(snake2camel(idName))
+      def smartConstructorName: Term.Name = Term.Name(snake2camel(combined))
+      def typePath = 
+        namespace.map(x => Type.Select(snake2Obj(x), snake2Type(name))).getOrElse(snake2Type(name))
+      def termPath = 
+        namespace.map(x => Term.Select(snake2Obj(x), snake2Obj(name))).getOrElse(snake2Obj(name))
+    }
+
   def convert(ress: List[Resource]) = {
     val lookup = ress.map(res => res.name -> res).toMap
 
@@ -91,6 +106,7 @@ object Generator extends App {
         case Some(_) => Rel(res.name, rel).validNec
         case None    => raise(s"Relation '$rel' is not defined on resource '${res.name}'", caret)
       }
+
 
     def verifyResourceRel(res: String, rel: String, caret: Caret): ValidatedNec[Error, Rel] =
       verifyResource(res, caret).andThen(res => verifyRelPerm(res, rel, caret))
@@ -145,23 +161,25 @@ object Generator extends App {
   def snake2Obj(x: String): Term.Name =
     Term.Name(snake2camel(x).capitalize)
 
-  def definitionTypeReference(x: String): Type.Ref =
-    x.split("/").toList match {
-      case x :: Nil      => snake2Type(x)
-      case x :: y :: Nil => Type.Select(snake2Obj(x), snake2Type(y))
-      case _             => ???
-    }
-
-  def definitionValueReference(x: String): Term.Ref =
-    x.split("/").toList match {
-      case x :: Nil      => snake2Obj(x)
-      case x :: y :: Nil => Term.Select(snake2Obj(x), snake2Obj(y))
-      case _             => ???
-    }
-
   case class PossibleType(typename: String) {
-    def tpe = definitionTypeReference(typename)
-    def companion = definitionValueReference(typename)
+    val (typenamePrefix, actualTypename) = {
+      val (lst, prefix) = typename.split("/").toList.toNel
+        .map(xs => (xs.last, xs.init))
+        .getOrElse((typename, Nil))
+      val fullPrefix = Term.Name("self") :: prefix.map(snake2Obj)
+      fullPrefix.foldLeft(Option.empty[Term.Ref]) { case (z, nxt) =>
+        z.map(Term.Select(_, nxt)).orElse(Some(nxt))
+      } -> lst
+    }
+
+    def tpe = {
+      val r = snake2Type(actualTypename)
+      typenamePrefix.map(Type.Select(_, r)).getOrElse(r)
+    }
+    def companion = {
+      val r = snake2Obj(actualTypename)
+      typenamePrefix.map(Term.Select(_, r)).getOrElse(r)
+    }
     
     def unionName(parentUnionName: String) = parentUnionName + "_" + typename
     def unionCompanion(parentUnionName: String) = snake2Obj(unionName(parentUnionName))
@@ -190,6 +208,10 @@ object Generator extends App {
     def unionCompanion = snake2Obj(unionName)
     def unionType = snake2Type(unionName)
 
+    def relationBaseName = baseName + "_relation_type"
+    def relationCompanion = snake2Obj(relationBaseName)
+    def relationTpe = Type.Singleton(relationCompanion)
+
     def caseClassMethod(caseClass: Type.Name, parentCompanion: Term.Name) = {
       val methodName = Term.Name(snake2camel(baseName))
       val sr = subjectRelation.map(x => q"Some(Relation.unsafeFromString(${Lit.String(x)}))").getOrElse(q"None")
@@ -197,16 +219,16 @@ object Generator extends App {
         case NonEmptyList(x, Nil) => 
           q"""
             def $methodName(that: ${x.tpe}): PermissionRequest[
-              ${caseClass},
-              ${typename},
+              $caseClass,
+              $parentCompanion.$relationCompanion.type,
               ${x.tpe}
             ] = $parentCompanion.$companion(this, that, $sr)
           """
         case _ => 
           q"""
             def $methodName[A <: Spice4sResource](that: A)(implicit ev: $companion.$unionType[A]): PermissionRequest[
-              ${caseClass},
-              ${typename},
+              $caseClass,
+              $parentCompanion.$relationCompanion.type,
               ${Type.Name("A")}
             ] = $parentCompanion.$companion(this, that, $sr)
           """
@@ -220,14 +242,20 @@ object Generator extends App {
         """ :: possibleTypes.toList.map(_.unionImpl(unionName))
       ).filter(_ => possibleTypes.size > 1)
 
+    def relationType = 
+      q"""
+        implicit object ${relationCompanion} extends Spice4sRelationType {
+          def relation = Relation.unsafeFromString(${Lit.String(rd.name)})
+        }
+      """
 
-    def relationObj(caseClass: Type.Name, companion: Term.Name) = {
+    def relationObj(caseClass: Type.Name, parentCompanion: Term.Name) = {
       val xs = List(
         q"""
-          def resource = $companion
+          def resource = $parentCompanion
         """,
         q"""
-          def relation = Relation.unsafeFromString(${Lit.String(rd.name)})
+          def relation = $relationCompanion
         """
       )
 
@@ -236,7 +264,7 @@ object Generator extends App {
           q"""
             implicit object ${companion} extends Spice4sRelation[
               ${caseClass},
-              $typename,
+              $relationTpe,
               ${x.tpe}
             ] {
               def subResource = ${x.companion}
@@ -247,7 +275,7 @@ object Generator extends App {
           q"""
             implicit object ${companion} extends Spice4sUnionRelation[
               ${caseClass},
-              $typename,
+              $relationTpe,
               ${unionType}
             ] {
               def subs = NonEmptyList.of(..${possibleTypes.toList.map(_.companion)})
@@ -262,7 +290,7 @@ object Generator extends App {
     caseClass: Type.Name, 
     companion: Term.Name,
     mrs: List[MakeRelation]
-  ) = 
+  ): Defn.Class = 
     q"""
     case class ${caseClass}(id: Id) extends Spice4sResource {
       def companion: Spice4sCompanion[$caseClass] = ${companion}
@@ -275,9 +303,9 @@ object Generator extends App {
     caseClass: Type.Name, 
     companion: Term.Name,
     mrs: List[MakeRelation]
-  ) = {
+  ): Defn.Object = {
     val ext = Init(
-      Type.Apply(Type.Name("Spice4sRelation"), Type.ArgClause(List(caseClass))),
+      Type.Apply(Type.Name("Spice4sCompanion"), Type.ArgClause(List(caseClass))),
       Name.Anonymous(),
       Seq.empty
     )
@@ -286,14 +314,12 @@ object Generator extends App {
         def constants: Spice4sConstants[$caseClass] = new Spice4sConstants[$caseClass] {
           def objectType = Type.unsafeFromString(${Lit.String(spiceName)})
         }
-        def encoded[A](a: A)(implicit ev: Spice4sIdEncoder[A]): $caseClass =
-          $companion(ev.encode(a))
-        ..${mrs.flatMap(mr => mr.unionHierachy ++ List(mr.relationObj(caseClass, companion)))}
+        ..${mrs.flatMap(mr => mr.unionHierachy ++ List(mr.relationType, mr.relationObj(caseClass, companion)))}
       }
     """
   }
 
-  def doResource(res: Resource, computed: State) = {
+  def doResource(res: Resource, computed: State): List[Defn] = {
     val zs: List[MakeRelation] = res.content.flatMap { 
         case r: RelationDef =>
           val pureResources = r.resources
@@ -321,19 +347,25 @@ object Generator extends App {
     )
   }
 
-  def convertSchema(schema: String) = {
+  type Effect[A] = WriterT[EitherNec[String, *], List[ResourceId], A]
+  def raise[A](errs: NonEmptyChain[String]): Effect[A] = WriterT.liftF(errs.asLeft)
+  def pure[A](a: A): Effect[A] = Monad[Effect].pure(a)
+  def tell(a: List[ResourceId]): Effect[Unit] = WriterT.tell(a)
+  def convertSchema(schema: String): Effect[List[Defn]] = {
     val res = spice4s.parser.Parse.parseWith(spice4s.parser.SchemaParser.schema)(schema)
 
     res match {
-      case Left(err) => err.leftNec
+      case Left(err) => raise(NonEmptyChain.of(err))
       case Right(ress) =>
         val s = convert(ress)
         s match {
           case Validated.Invalid(errs) =>
-            errs.map { err =>
-              val (msg, _, _) = spice4s.parser.ParserUtil.showVirtualTextLine(schema, err.position.offset)
-              s"${err.message}:\n" + msg + "\n"
-            }.asLeft
+            raise(
+              errs.map { err =>
+                val (msg, _, _) = spice4s.parser.ParserUtil.showVirtualTextLine(schema, err.position.offset)
+                s"${err.message}:\n" + msg + "\n"
+              }
+            )
           case Validated.Valid(state) =>
             val computed = compute(state)
             val namespaced = ress.map { res =>
@@ -343,12 +375,15 @@ object Generator extends App {
                 case _                 => (None -> res)
               }
             }
+
             namespaced
               .groupMap { case (ns, _) => ns } { case (_, res) => res }
               .toList
-              .flatMap { case (ns, ress) =>
-                val body = ress.flatMap(doResource(_, computed))
-
+              .flatTraverse { case (ns, ress) =>
+                ress.flatTraverse{ x =>
+                  val rid = ResourceId(x.name, ns)
+                  tell(List(rid)) >> pure(doResource(x, computed))
+                }.map{ body => 
                 ns match {
                   case None => body
                   case Some(ns) =>
@@ -361,20 +396,48 @@ object Generator extends App {
                     )
                 }
               }
-              .asRight
+              }
         }
     }
   }
 
   def generate(schema: String): EitherNec[String, String] =
-    convertSchema(schema).map { xs =>
+    convertSchema(schema).run.map { case (names, xs) =>
+      val allNames = names.toSet
+
       val prefix = List(
         q"package spice4s.generated",
         q"import spice4s.client.models._",
-        q"import spice4s.generator.core._"
+        q"import spice4s.generator.core._",
+        q"import spice4s.encoder._"
       )
-      val all = prefix ++ xs
-      all.map(_.syntax).mkString("\n\n")
+
+      
+        val params = allNames.toList
+          .map{ n => 
+            val k = n.typeclass.value.head.toLower.toString() + n.typeclass.value.tail
+            val ap = Type.Apply(Type.Name("Spice4sIdEncoder"), Type.ArgClause(List(n.typename)))
+            Term.Param(List(Mod.ValParam()), Term.Name(k), Some(ap), None)
+          }
+
+        val smartConstructors = allNames.map{ rid =>
+          q"""
+            def ${rid.smartConstructorName}(a: ${rid.typename}): ${rid.typePath} = 
+              ${rid.termPath}(${rid.typeclass}.encode(a))
+          """
+        }
+
+      val body = q"""
+      abstract class Schema[..${allNames.map(_.typename).toList.map(Type.Param(Nil, _, Nil, Type.Bounds(None, None), Nil, Nil))}](
+          ..$params
+      ) { self =>
+        ..${xs ++ smartConstructors}
+      }
+      """
+
+      val all = prefix ++ List(body)
+
+      all.foldMap(_.syntax + "\n")
     }
 
   def generateFromTo[F[_]: Files](from: Path, to: Path)(implicit F: Async[F]): F[Option[NonEmptyChain[String]]] =

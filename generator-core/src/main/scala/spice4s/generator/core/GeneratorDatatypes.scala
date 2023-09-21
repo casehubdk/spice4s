@@ -40,9 +40,9 @@ final case class PermissionRequest[Res <: Spice4sResource, Rel <: Spice4sRelatio
 }
 
 trait Spice4sRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <: Spice4sResource] {
-  def resource: Spice4sConstants[Res]
+  def resource: Spice4sCompanion[Res]
   def relation: Rel
-  def subResource: Spice4sConstants[Sub]
+  def subResource: Spice4sCompanion[Sub]
   def apply(res: Res, sub: Sub, subjectRelation: Option[Relation]): PermissionRequest[Res, Rel, Sub] =
     PermissionRequest(res, relation, sub, subjectRelation)
   def check(res: Res)(sub: Sub): PermissionRequest[Res, Rel, Sub] =
@@ -50,14 +50,14 @@ trait Spice4sRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <:
   def checkSub(res: Res)(sub: Sub, subjectRelation: Relation): PermissionRequest[Res, Rel, Sub] =
     apply(res, sub, Some(subjectRelation))
 }
-/*
+
 trait Spice4sUnionRelation[
   Res <: Spice4sResource, 
   Rel <: Spice4sRelationType,
-  Sub[x <: Spice4sResource] <: Spice4sResourceConstantsRef[x]
+  Sub[x <: Spice4sResource] <: Spice4sCompanion[x]
 ] {
-  def resource: Spice4sResourceConstants[Res]
-  def relation: Relation
+  def resource: Spice4sCompanion[Res]
+  def relation: Rel
   def subs: NonEmptyList[Sub[?]]
   def apply[A <: Spice4sResource](res: Res, sub: A, subjectRelation: Option[Relation])(implicit @unused ev: Sub[A]) =
     PermissionRequest(res, relation, sub, subjectRelation)
@@ -65,4 +65,4 @@ trait Spice4sUnionRelation[
     apply(res, sub, None)
   def checkSub[A <: Spice4sResource](res: Res)(sub: A, subjectRelation: Relation)(implicit ev: Sub[A]) =
     apply(res, sub, Some(subjectRelation))
-}*/
+}
