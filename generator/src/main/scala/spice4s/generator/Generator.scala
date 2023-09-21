@@ -74,21 +74,6 @@ case class Other(...
 object Generator extends App {
   final case class Error(message: String, position: Caret)
 
-    case class ResourceId(
-      name: String,
-      namespace: Option[String]
-    ) {
-      def combined = namespace.foldMap(_ + "_") + name
-      def idName = combined + "_id"
-      def typename: Type.Name = snake2Type(idName)
-      def typeclass: Term.Name = Term.Name(snake2camel(idName))
-      def smartConstructorName: Term.Name = Term.Name(snake2camel(combined))
-      def typePath = 
-        namespace.map(x => Type.Select(snake2Obj(x), snake2Type(name))).getOrElse(snake2Type(name))
-      def termPath = 
-        namespace.map(x => Term.Select(snake2Obj(x), snake2Obj(name))).getOrElse(snake2Obj(name))
-    }
-
   def convert(ress: List[Resource]) = {
     val lookup = ress.map(res => res.name -> res).toMap
 
@@ -106,7 +91,6 @@ object Generator extends App {
         case Some(_) => Rel(res.name, rel).validNec
         case None    => raise(s"Relation '$rel' is not defined on resource '${res.name}'", caret)
       }
-
 
     def verifyResourceRel(res: String, rel: String, caret: Caret): ValidatedNec[Error, Rel] =
       verifyResource(res, caret).andThen(res => verifyRelPerm(res, rel, caret))
@@ -166,7 +150,7 @@ object Generator extends App {
       val (lst, prefix) = typename.split("/").toList.toNel
         .map(xs => (xs.last, xs.init))
         .getOrElse((typename, Nil))
-      val fullPrefix = Term.Name("self") :: prefix.map(snake2Obj)
+      val fullPrefix = Term.Name("spice4s") :: Term.Name("generated") :: prefix.map(snake2Obj)
       fullPrefix.foldLeft(Option.empty[Term.Ref]) { case (z, nxt) =>
         z.map(Term.Select(_, nxt)).orElse(Some(nxt))
       } -> lst
@@ -314,6 +298,8 @@ object Generator extends App {
         def constants: Spice4sConstants[$caseClass] = new Spice4sConstants[$caseClass] {
           def objectType = Type.unsafeFromString(${Lit.String(spiceName)})
         }
+        def encoded[A](a: A)(implicit ev: Spice4sIdEncoder[A]): $caseClass =
+          $companion(ev.encode(a))
         ..${mrs.flatMap(mr => mr.unionHierachy ++ List(mr.relationType, mr.relationObj(caseClass, companion)))}
       }
     """
@@ -347,10 +333,9 @@ object Generator extends App {
     )
   }
 
-  type Effect[A] = WriterT[EitherNec[String, *], List[ResourceId], A]
-  def raise[A](errs: NonEmptyChain[String]): Effect[A] = WriterT.liftF(errs.asLeft)
+  type Effect[A] = EitherNec[String, A]
+  def raise[A](errs: NonEmptyChain[String]): Effect[A] = errs.asLeft
   def pure[A](a: A): Effect[A] = Monad[Effect].pure(a)
-  def tell(a: List[ResourceId]): Effect[Unit] = WriterT.tell(a)
   def convertSchema(schema: String): Effect[List[Defn]] = {
     val res = spice4s.parser.Parse.parseWith(spice4s.parser.SchemaParser.schema)(schema)
 
@@ -376,14 +361,12 @@ object Generator extends App {
               }
             }
 
+            pure {
             namespaced
               .groupMap { case (ns, _) => ns } { case (_, res) => res }
               .toList
-              .flatTraverse { case (ns, ress) =>
-                ress.flatTraverse{ x =>
-                  val rid = ResourceId(x.name, ns)
-                  tell(List(rid)) >> pure(doResource(x, computed))
-                }.map{ body => 
+              .flatMap { case (ns, ress) =>
+                val body = ress.flatMap(doResource(_, computed))
                 ns match {
                   case None => body
                   case Some(ns) =>
@@ -402,42 +385,14 @@ object Generator extends App {
   }
 
   def generate(schema: String): EitherNec[String, String] =
-    convertSchema(schema).run.map { case (names, xs) =>
-      val allNames = names.toSet
-
+    convertSchema(schema).map { xs =>
       val prefix = List(
         q"package spice4s.generated",
         q"import spice4s.client.models._",
         q"import spice4s.generator.core._",
         q"import spice4s.encoder._"
       )
-
-      
-        val params = allNames.toList
-          .map{ n => 
-            val k = n.typeclass.value.head.toLower.toString() + n.typeclass.value.tail
-            val ap = Type.Apply(Type.Name("Spice4sIdEncoder"), Type.ArgClause(List(n.typename)))
-            Term.Param(List(Mod.ValParam()), Term.Name(k), Some(ap), None)
-          }
-
-        val smartConstructors = allNames.map{ rid =>
-          q"""
-            def ${rid.smartConstructorName}(a: ${rid.typename}): ${rid.typePath} = 
-              ${rid.termPath}(${rid.typeclass}.encode(a))
-          """
-        }
-
-      val body = q"""
-      abstract class Schema[..${allNames.map(_.typename).toList.map(Type.Param(Nil, _, Nil, Type.Bounds(None, None), Nil, Nil))}](
-          ..$params
-      ) { self =>
-        ..${xs ++ smartConstructors}
-      }
-      """
-
-      val all = prefix ++ List(body)
-
-      all.foldMap(_.syntax + "\n")
+      (prefix ++ xs).map(_.syntax).mkString("\n\n")
     }
 
   def generateFromTo[F[_]: Files](from: Path, to: Path)(implicit F: Async[F]): F[Option[NonEmptyChain[String]]] =
