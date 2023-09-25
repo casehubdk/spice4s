@@ -30,10 +30,10 @@ import scala.annotation.tailrec
 case class CaseClass(id: ID) extends Spice4sResource { 
   def companion: Spice4sCompanion[CaseClass] = CaseClass
 
-  def relation1(that: That): PermissionRequest[CaseClass, Relation1.type, That] = 
-    PermissionRequest(this, Relation1, that, None)
-  def relation2[A <: Spice4sResource](that: A)(implicit ev: Relation2[A]): PermissionRequest[CaseClass, Relation2.type, A] = 
-    PermissionRequest(this, Relation2, that, None)
+  def relation1(that: That): RelationshipRequest[CaseClass, Relation1.type, That] = 
+    RelationshipRequest(this, Relation1, that, None)
+  def relation2[A <: Spice4sResource](that: A)(implicit ev: Relation2[A]): RelationshipRequest[CaseClass, Relation2.type, A] = 
+    RelationshipRequest(this, Relation2, that, None)
 }
 
 object CaseClass extends Spice4sCompanion[CaseClass] {
@@ -198,23 +198,22 @@ object Generator extends App {
 
     def caseClassMethod(caseClass: Type.Name, parentCompanion: Term.Name) = {
       val methodName = Term.Name(snake2camel(baseName))
-      val sr = subjectRelation.map(x => q"Some(Relation.unsafeFromString(${Lit.String(x)}))").getOrElse(q"None")
       possibleTypes match {
         case NonEmptyList(x, Nil) => 
           q"""
-            def $methodName(that: ${x.tpe}): PermissionRequest[
+            def $methodName(that: ${x.tpe}): RelationshipRequest[
               $caseClass,
               $parentCompanion.$relationCompanion.type,
               ${x.tpe}
-            ] = $parentCompanion.$companion(this, that, $sr)
+            ] = $parentCompanion.$companion(this, that)
           """
         case _ => 
           q"""
-            def $methodName[A <: Spice4sResource](that: A)(implicit ev: $companion.$unionType[A]): PermissionRequest[
+            def $methodName[A <: Spice4sResource](that: A)(implicit ev: $companion.$unionType[A]): RelationshipRequest[
               $caseClass,
               $parentCompanion.$relationCompanion.type,
               ${Type.Name("A")}
-            ] = $parentCompanion.$companion(this, that, $sr)
+            ] = $parentCompanion.$companion(this, that)
           """
       }
     }
@@ -240,6 +239,14 @@ object Generator extends App {
         """,
         q"""
           def relation = $relationCompanion
+        """,
+        q"""
+          def subjectRelation = ${
+            subjectRelation match {
+              case None => q"None"
+              case Some(x) => q"Some(Relation.unsafeFromString(${Lit.String(x)}))"
+            }
+          }
         """
       )
 
@@ -298,7 +305,7 @@ object Generator extends App {
         def constants: Spice4sConstants[$caseClass] = new Spice4sConstants[$caseClass] {
           def objectType = Type.unsafeFromString(${Lit.String(spiceName)})
         }
-        def encoded[A](a: A)(implicit ev: Spice4sIdEncoder[A]): $caseClass =
+        def encoded[A](a: A)(implicit ev: Spice4sEncoder[A]): $caseClass =
           $companion(ev.encode(a))
         ..${mrs.flatMap(mr => mr.unionHierachy ++ List(mr.relationType, mr.relationObj(caseClass, companion)))}
       }

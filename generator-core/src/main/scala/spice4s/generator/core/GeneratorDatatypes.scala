@@ -11,6 +11,8 @@ trait Spice4sResource {
     companion.constants.objectType,
     id
   )
+  def sub(subjectRelation: Option[Relation]) =
+    SubjectReference(ref, subjectRelation)
 }
 
 trait Spice4sCompanion[A <: Spice4sResource] {
@@ -25,44 +27,60 @@ trait Spice4sRelationType {
   def relation: Relation
 }
 
-final case class PermissionRequest[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <: Spice4sResource](
+final case class RelationshipRequest[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <: Spice4sResource](
     res: Res,
     rel: Rel,
     sub: Sub,
     subjectRelation: Option[Relation]
 ) {
-  def request: CheckPermissionRequest = CheckPermissionRequest(
+  def checkPermission: CheckPermissionRequest = CheckPermissionRequest(
     None,
     res.ref,
     rel.relation,
     SubjectReference(sub.ref, subjectRelation)
   )
+
+  def relationship: Relationship = Relationship(
+    res.ref,
+    rel.relation,
+    sub.sub(subjectRelation)
+  )
+
+  def writeRelationship(op: RelationshipUpdate.Operation): WriteRelationshipsRequest =
+    WriteRelationshipsRequest(
+      NonEmptyList.one(RelationshipUpdate(op, relationship)),
+      Nil
+    )
+
+  def touch: WriteRelationshipsRequest =
+    writeRelationship(RelationshipUpdate.Operation.Touch)
+
+  def create: WriteRelationshipsRequest =
+    writeRelationship(RelationshipUpdate.Operation.Create)
+
+  def delete: WriteRelationshipsRequest =
+    writeRelationship(RelationshipUpdate.Operation.Delete)
 }
 
 trait Spice4sRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <: Spice4sResource] {
   def resource: Spice4sCompanion[Res]
   def relation: Rel
   def subResource: Spice4sCompanion[Sub]
-  def apply(res: Res, sub: Sub, subjectRelation: Option[Relation]): PermissionRequest[Res, Rel, Sub] =
-    PermissionRequest(res, relation, sub, subjectRelation)
-  def check(res: Res)(sub: Sub): PermissionRequest[Res, Rel, Sub] =
-    apply(res, sub, None)
-  def checkSub(res: Res)(sub: Sub, subjectRelation: Relation): PermissionRequest[Res, Rel, Sub] =
-    apply(res, sub, Some(subjectRelation))
+  def subjectRelation: Option[Relation]
+  def apply(res: Res, sub: Sub): RelationshipRequest[Res, Rel, Sub] =
+    RelationshipRequest(res, relation, sub, subjectRelation)
 }
 
 trait Spice4sUnionRelation[
-  Res <: Spice4sResource, 
-  Rel <: Spice4sRelationType,
-  Sub[x <: Spice4sResource] <: Spice4sCompanion[x]
+    Res <: Spice4sResource,
+    Rel <: Spice4sRelationType,
+    Sub[x <: Spice4sResource] <: Spice4sCompanion[x]
 ] {
   def resource: Spice4sCompanion[Res]
   def relation: Rel
   def subs: NonEmptyList[Sub[?]]
-  def apply[A <: Spice4sResource](res: Res, sub: A, subjectRelation: Option[Relation])(implicit @unused ev: Sub[A]) =
-    PermissionRequest(res, relation, sub, subjectRelation)
-  def check[A <: Spice4sResource](res: Res)(sub: A)(implicit ev: Sub[A]) =
-    apply(res, sub, None)
-  def checkSub[A <: Spice4sResource](res: Res)(sub: A, subjectRelation: Relation)(implicit ev: Sub[A]) =
-    apply(res, sub, Some(subjectRelation))
+  def subjectRelation: Option[Relation]
+  def apply[A <: Spice4sResource](res: Res, sub: A)(implicit @unused ev: Sub[A]): RelationshipRequest[Res, Rel, A] =
+    RelationshipRequest(res, relation, sub, subjectRelation)
 }
+

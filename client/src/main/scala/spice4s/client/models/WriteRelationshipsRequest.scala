@@ -18,6 +18,8 @@ package spice4s.client.models
 
 import com.authzed.api.v1.{permission_service => ps}
 import cats.data._
+import cats.implicits._
+import cats._
 
 final case class WriteRelationshipsRequest(
     updates: NonEmptyList[RelationshipUpdate],
@@ -27,4 +29,15 @@ final case class WriteRelationshipsRequest(
     updates.map(_.encode).toList,
     preconditions.map(_.encode)
   )
+}
+
+object WriteRelationshipsRequest {
+  implicit lazy val semigroupInstance: Semigroup[WriteRelationshipsRequest] =
+    new Semigroup[WriteRelationshipsRequest] {
+      def combine(x: WriteRelationshipsRequest, y: WriteRelationshipsRequest) =
+        WriteRelationshipsRequest(
+          x.updates |+| y.updates,
+          x.preconditions |+| y.preconditions
+        )
+    }
 }
