@@ -27,12 +27,12 @@ import cats.parse.Caret
 import scala.annotation.tailrec
 
 /*
-case class CaseClass(id: ID) extends Spice4sResource { 
+case class CaseClass(id: ID) extends Spice4sResource {
   def companion: Spice4sCompanion[CaseClass] = CaseClass
 
-  def relation1(that: That): RelationshipRequest[CaseClass, Relation1.type, That] = 
+  def relation1(that: That): RelationshipRequest[CaseClass, Relation1.type, That] =
     RelationshipRequest(this, Relation1, that, None)
-  def relation2[A <: Spice4sResource](that: A)(implicit ev: Relation2[A]): RelationshipRequest[CaseClass, Relation2.type, A] = 
+  def relation2[A <: Spice4sResource](that: A)(implicit ev: Relation2[A]): RelationshipRequest[CaseClass, Relation2.type, A] =
     RelationshipRequest(this, Relation2, that, None)
 }
 
@@ -70,7 +70,7 @@ object That extends Spice4sCompanion[That] {
 
 case class Other(...
 ...
-*/
+ */
 object Generator extends App {
   final case class Error(message: String, position: Caret)
 
@@ -147,7 +147,10 @@ object Generator extends App {
 
   case class PossibleType(typename: String) {
     val (typenamePrefix, actualTypename) = {
-      val (lst, prefix) = typename.split("/").toList.toNel
+      val (lst, prefix) = typename
+        .split("/")
+        .toList
+        .toNel
         .map(xs => (xs.last, xs.init))
         .getOrElse((typename, Nil))
       val fullPrefix = Term.Name("spice4s") :: Term.Name("generated") :: prefix.map(snake2Obj)
@@ -164,20 +167,20 @@ object Generator extends App {
       val r = snake2Obj(actualTypename)
       typenamePrefix.map(Term.Select(_, r)).getOrElse(r)
     }
-    
+
     def unionName(parentUnionName: String) = parentUnionName + "_" + typename
     def unionCompanion(parentUnionName: String) = snake2Obj(unionName(parentUnionName))
     def unionImpl(parentUnionName: String) = {
-      val ext = 
+      val ext =
         Init(
-        Type.Apply(snake2Type(parentUnionName), Type.ArgClause(List(tpe))),
-        Name.Anonymous(),
-        Seq(Term.ArgClause(List(companion)))
-      )
+          Type.Apply(snake2Type(parentUnionName), Type.ArgClause(List(tpe))),
+          Name.Anonymous(),
+          Seq(Term.ArgClause(List(companion)))
+        )
       q"""implicit object ${unionCompanion(parentUnionName)} extends $ext"""
     }
   }
-  
+
   final case class MakeRelation(
       rd: ResourceDef,
       possibleTypes: NonEmptyList[PossibleType],
@@ -199,7 +202,7 @@ object Generator extends App {
     def caseClassMethod(caseClass: Type.Name, parentCompanion: Term.Name) = {
       val methodName = Term.Name(snake2camel(baseName))
       possibleTypes match {
-        case NonEmptyList(x, Nil) => 
+        case NonEmptyList(x, Nil) =>
           q"""
             def $methodName(that: ${x.tpe}): RelationshipRequest[
               $caseClass,
@@ -207,7 +210,7 @@ object Generator extends App {
               ${x.tpe}
             ] = $parentCompanion.$companion(this, that)
           """
-        case _ => 
+        case _ =>
           q"""
             def $methodName[A <: Spice4sResource](that: A)(implicit ev: $companion.$unionType[A]): RelationshipRequest[
               $caseClass,
@@ -218,14 +221,14 @@ object Generator extends App {
       }
     }
 
-    def unionHierachy = 
+    def unionHierachy =
       (
         q"""
           sealed abstract class ${unionType}[A <: Spice4sResource](val a: Spice4sCompanion[A]) extends Spice4sUnion[A]
         """ :: possibleTypes.toList.map(_.unionImpl(unionName))
       ).filter(_ => possibleTypes.size > 1)
 
-    def relationType = 
+    def relationType =
       q"""
         implicit object ${relationCompanion} extends Spice4sRelationType {
           def relation = Relation.unsafeFromString(${Lit.String(rd.name)})
@@ -241,17 +244,15 @@ object Generator extends App {
           def relation = $relationCompanion
         """,
         q"""
-          def subjectRelation = ${
-            subjectRelation match {
-              case None => q"None"
-              case Some(x) => q"Some(Relation.unsafeFromString(${Lit.String(x)}))"
-            }
-          }
+          def subjectRelation = ${subjectRelation match {
+          case None    => q"None"
+          case Some(x) => q"Some(Relation.unsafeFromString(${Lit.String(x)}))"
+        }}
         """
       )
 
       possibleTypes match {
-        case NonEmptyList(x, Nil) => 
+        case NonEmptyList(x, Nil) =>
           q"""
             implicit object ${companion} extends Spice4sRelation[
               ${caseClass},
@@ -262,7 +263,7 @@ object Generator extends App {
               ..$xs
             }
         """
-        case _ => 
+        case _ =>
           q"""
             implicit object ${companion} extends Spice4sUnionRelation[
               ${caseClass},
@@ -278,10 +279,10 @@ object Generator extends App {
   }
 
   def resourceCaseClass(
-    caseClass: Type.Name, 
-    companion: Term.Name,
-    mrs: List[MakeRelation]
-  ): Defn.Class = 
+      caseClass: Type.Name,
+      companion: Term.Name,
+      mrs: List[MakeRelation]
+  ): Defn.Class =
     q"""
     case class ${caseClass}(id: Id) extends Spice4sResource {
       def companion: Spice4sCompanion[$caseClass] = ${companion}
@@ -290,10 +291,10 @@ object Generator extends App {
     """
 
   def resourceCompanion(
-    spiceName: String,
-    caseClass: Type.Name, 
-    companion: Term.Name,
-    mrs: List[MakeRelation]
+      spiceName: String,
+      caseClass: Type.Name,
+      companion: Term.Name,
+      mrs: List[MakeRelation]
   ): Defn.Object = {
     val ext = Init(
       Type.Apply(Type.Name("Spice4sCompanion"), Type.ArgClause(List(caseClass))),
@@ -312,28 +313,28 @@ object Generator extends App {
     """
   }
 
-  def doResource(res: Resource, computed: State): List[Defn] = {
-    val zs: List[MakeRelation] = res.content.flatMap { 
-        case r: RelationDef =>
-          val pureResources = r.resources
-            .collect { case ResourceReference(resource, None, _) => resource }
-          val labelledEdges = r.resources
-            .collect { case ResourceReference(resource, Some(ResourceRelationType.Relation(label)), _) =>
-              label -> resource
-            }
-            .groupMap { case (k, _) => k } { case (_, v) => v }
-
-          pureResources.toNel.toList.map(nel => MakeRelation(r, nel.map(PossibleType(_)), None)) ++
-            labelledEdges.toList
-              .collect { case (sr, x :: xs) => MakeRelation(r, NonEmptyList(x, xs).map(PossibleType(_)), Some(sr)) }
-        case pd: PermissionDef =>
-          computed.lookup(res.name, pd.name).toNel.toList.map { nel =>
-            MakeRelation(pd, nel.map(PossibleType(_)), None)
+  def doResource(res: Resource, localName: String, computed: State): List[Defn] = {
+    val zs: List[MakeRelation] = res.content.flatMap {
+      case r: RelationDef =>
+        val pureResources = r.resources
+          .collect { case ResourceReference(resource, None, _) => resource }
+        val labelledEdges = r.resources
+          .collect { case ResourceReference(resource, Some(ResourceRelationType.Relation(label)), _) =>
+            label -> resource
           }
+          .groupMap { case (k, _) => k } { case (_, v) => v }
+
+        pureResources.toNel.toList.map(nel => MakeRelation(r, nel.map(PossibleType(_)), None)) ++
+          labelledEdges.toList
+            .collect { case (sr, x :: xs) => MakeRelation(r, NonEmptyList(x, xs).map(PossibleType(_)), Some(sr)) }
+      case pd: PermissionDef =>
+        computed.lookup(res.name, pd.name).toNel.toList.map { nel =>
+          MakeRelation(pd, nel.map(PossibleType(_)), None)
+        }
     }
 
-    val caseClass = snake2Type(res.name)
-    val companion = snake2Obj(res.name)
+    val caseClass = snake2Type(localName)
+    val companion = snake2Obj(localName)
     List(
       resourceCaseClass(caseClass, companion, zs),
       resourceCompanion(res.name, caseClass, companion, zs)
@@ -363,30 +364,30 @@ object Generator extends App {
             val namespaced = ress.map { res =>
               val parts = res.name.split("/")
               parts.toList match {
-                case ns :: name :: Nil => (Some(ns) -> res.copy(name = name))
-                case _                 => (None -> res)
+                case ns :: name :: Nil => (Some(ns) -> ((name, res)))
+                case _                 => (None -> ((res.name, res)))
               }
             }
 
             pure {
-            namespaced
-              .groupMap { case (ns, _) => ns } { case (_, res) => res }
-              .toList
-              .flatMap { case (ns, ress) =>
-                val body = ress.flatMap(doResource(_, computed))
-                ns match {
-                  case None => body
-                  case Some(ns) =>
-                    List(
-                      q"""
+              namespaced
+                .groupMap { case (ns, _) => ns } { case (_, res) => res }
+                .toList
+                .flatMap { case (ns, ress) =>
+                  val body = ress.flatMap { case (localName, res) => doResource(res, localName, computed) }
+                  ns match {
+                    case None => body
+                    case Some(ns) =>
+                      List(
+                        q"""
                         object ${snake2Obj(ns)} {
                           ..$body
                         }
                       """
-                    )
+                      )
+                  }
                 }
-              }
-              }
+            }
         }
     }
   }
