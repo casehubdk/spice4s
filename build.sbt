@@ -32,7 +32,7 @@ lazy val proto = project
   .enablePlugins(Fs2Grpc)
   .settings(
     name := "spice4s-client-proto-api",
-    scalapbCodeGenerators := scalapbCodeGenerators.value/* ++ Seq(
+    scalapbCodeGenerators := scalapbCodeGenerators.value /* ++ Seq(
       protocbridge.Target(scalapb.validate.gen(), (Compile / sourceManaged).value / "scalapb")
     )*/,
     libraryDependencies ++= Seq(
@@ -44,7 +44,7 @@ lazy val proto = project
     ),
     tlFatalWarningsInCi := false,
     excludeDependencies ++= Seq(
-      ExclusionRule("com.thesamet.scalapb", "scalapb-validate-core_2.13"),
+      ExclusionRule("com.thesamet.scalapb", "scalapb-validate-core_2.13")
     )
   )
 
@@ -60,12 +60,19 @@ lazy val client = project
     )
   )
 
+lazy val testkit = project
+  .in(file("testkit"))
+  .settings(sharedSettings)
+  .dependsOn(proto)
+  .dependsOn(client)
+  .settings(name := "spice4s-testkit")
+
 lazy val generatorCore = project
   .in(file("generator-core"))
   .settings(sharedSettings)
   .dependsOn(client)
   .settings(
-    name := "spice4s-generator-core",
+    name := "spice4s-generator-core"
   )
 
 lazy val encoder = project
@@ -73,7 +80,7 @@ lazy val encoder = project
   .settings(sharedSettings)
   .dependsOn(client)
   .settings(
-    name := "spice4s-encoder",
+    name := "spice4s-encoder"
   )
 
 lazy val parser = project
