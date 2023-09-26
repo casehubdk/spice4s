@@ -65,6 +65,21 @@ trait SpiceClient[F[_]] { self =>
 }
 
 object SpiceClient {
+  val AUTHORIZATION = "authorization"
+  val METADATA_KEY = Metadata.Key.of(AUTHORIZATION, Metadata.ASCII_STRING_MARSHALLER)
+
+  def fromChannel[F[_]: Async](channel: Channel, token: String): Resource[F, SpiceClient[F]] =
+    PermissionsServiceFs2Grpc
+      .clientResource[F, Unit](
+        channel,
+        { _ =>
+          val m = new Metadata()
+          m.put(METADATA_KEY, s"Bearer ${token}")
+          m
+        }
+      )
+      .map(fromClient[F])
+
   def fromClient[F[_]: MonadThrow](client: PermissionsServiceFs2Grpc[F, Unit]): SpiceClient[F] = {
     def decodeWith[A, B](f: A => Decoded[B]): A => F[B] = a => raiseIn[F, B](f(a))
 
@@ -91,9 +106,4 @@ object SpiceClient {
         client.lookupSubjects(x.encode, ()).evalMap(decodeWith(LookupSubjectsResponse.decode))
     }
   }
-
-  def fromChannel[F[_]: Async](channel: Channel): Resource[F, SpiceClient[F]] =
-    PermissionsServiceFs2Grpc
-      .clientResource[F, Unit](channel, _ => new Metadata())
-      .map(fromClient[F])
 }
