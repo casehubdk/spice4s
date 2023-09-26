@@ -142,4 +142,7 @@ class StubClient[F[_]: Monad](
 
 object StubClient {
   case class State(relationships: List[Relationship])
+
+  def apply[F[_]](implicit F: Concurrent[F]): F[StubClient[F]] =
+    F.ref(State(Nil)).map(new StubClient(_))
 }
