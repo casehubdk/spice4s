@@ -29,7 +29,7 @@ object Spice4sEncoder {
   implicit val contravariant: ContravariantSemigroupal[Spice4sEncoder] =
     new ContravariantSemigroupal[Spice4sEncoder] {
       override def product[A, B](fa: Spice4sEncoder[A], fb: Spice4sEncoder[B]): Spice4sEncoder[(A, B)] =
-        of[(A, B)] { case (a, b) => unsafeFromString.encode(s"${fa.encode(a)}/${fb.encode(b)}") }
+        of[(A, B)] { case (a, b) => unsafeFromString.encode(s"${fa.encode(a).value}/${fb.encode(b).value}") }
 
       override def contramap[A, B](fa: Spice4sEncoder[A])(f: B => A): Spice4sEncoder[B] =
         of[B](b => fa.encode(f(b)))
