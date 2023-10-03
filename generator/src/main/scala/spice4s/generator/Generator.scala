@@ -248,6 +248,12 @@ object Generator extends App {
           case None    => q"None"
           case Some(x) => q"Some(Relation.unsafeFromString(${Lit.String(x)}))"
         }}
+        """,
+        q"""
+          def isPermission = ${rd match {
+          case _: RelationDef   => q"false"
+          case _: PermissionDef => q"true"
+        }}
         """
       )
 

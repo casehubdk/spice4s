@@ -62,11 +62,18 @@ final case class RelationshipRequest[Res <: Spice4sResource, Rel <: Spice4sRelat
     writeRelationship(RelationshipUpdate.Operation.Delete)
 }
 
-trait Spice4sRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <: Spice4sResource] {
+trait Spice4sAnyRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType] {
   def resource: Spice4sCompanion[Res]
   def relation: Rel
-  def subResource: Spice4sCompanion[Sub]
   def subjectRelation: Option[Relation]
+  def isPermission: Boolean
+  def subjects: NonEmptyList[Spice4sCompanion[? <: Spice4sResource]]
+}
+
+trait Spice4sRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <: Spice4sResource] 
+  extends Spice4sAnyRelation[Res, Rel] {
+  def subResource: Spice4sCompanion[Sub]
+  def subjects = NonEmptyList.one(subResource)
   def apply(res: Res, sub: Sub): RelationshipRequest[Res, Rel, Sub] =
     RelationshipRequest(res, relation, sub, subjectRelation)
 }
@@ -75,11 +82,8 @@ trait Spice4sUnionRelation[
     Res <: Spice4sResource,
     Rel <: Spice4sRelationType,
     Sub[x <: Spice4sResource] <: Spice4sCompanion[x]
-] {
-  def resource: Spice4sCompanion[Res]
-  def relation: Rel
-  def subs: NonEmptyList[Sub[?]]
-  def subjectRelation: Option[Relation]
+] extends Spice4sAnyRelation[Res, Rel] {
+  def subjects: NonEmptyList[Sub[? <: Spice4sResource]]
   def apply[A <: Spice4sResource](res: Res, sub: A)(implicit @unused ev: Sub[A]): RelationshipRequest[Res, Rel, A] =
     RelationshipRequest(res, relation, sub, subjectRelation)
 }
