@@ -7,6 +7,7 @@ ThisBuild / organizationName := "CaseHubDK"
 
 ThisBuild / tlBaseVersion := "0.0"
 ThisBuild / tlSonatypeUseLegacyHost := false
+ThisBuild / tlUntaggedAreSnapshots := false
 
 ThisBuild / tlCiMimaBinaryIssueCheck := false
 ThisBuild / tlMimaPreviousVersions := Set.empty
