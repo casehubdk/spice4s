@@ -1,3 +1,19 @@
+/*
+ * Copyright 2023 CaseHubDK
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package spice4s.generator.core
 
 import spice4s.client.models._
@@ -70,8 +86,7 @@ trait Spice4sAnyRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType] {
   def subjects: NonEmptyList[Spice4sCompanion[? <: Spice4sResource]]
 }
 
-trait Spice4sRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <: Spice4sResource] 
-  extends Spice4sAnyRelation[Res, Rel] {
+trait Spice4sRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <: Spice4sResource] extends Spice4sAnyRelation[Res, Rel] {
   def subResource: Spice4sCompanion[Sub]
   def subjects = NonEmptyList.one(subResource)
   def apply(res: Res, sub: Sub): RelationshipRequest[Res, Rel, Sub] =
@@ -87,4 +102,3 @@ trait Spice4sUnionRelation[
   def apply[A <: Spice4sResource](res: Res, sub: A)(implicit @unused ev: Sub[A]): RelationshipRequest[Res, Rel, A] =
     RelationshipRequest(res, relation, sub, subjectRelation)
 }
-
