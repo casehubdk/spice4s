@@ -49,10 +49,10 @@ object LookupSubjectsRequest {
   object WildcardOption {
     import ps.LookupSubjectsRequest.WildcardOption._
     case object Include extends WildcardOption {
-      def encode = WILDCARD_OPTION_INCLUDE_WILDCARDS
+      def encode: ps.LookupSubjectsRequest.WildcardOption = WILDCARD_OPTION_INCLUDE_WILDCARDS
     }
     case object Exclude extends WildcardOption {
-      def encode = WILDCARD_OPTION_EXCLUDE_WILDCARDS
+      def encode: ps.LookupSubjectsRequest.WildcardOption = WILDCARD_OPTION_EXCLUDE_WILDCARDS
     }
   }
 }

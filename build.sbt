@@ -1,4 +1,4 @@
-val scala213Version = "2.13.11"
+val scala213Version = "2.13.12"
 
 ThisBuild / scalaVersion := scala213Version
 ThisBuild / crossScalaVersions := Seq(scala213Version /*, "3.3.0"*/ )
@@ -25,7 +25,14 @@ lazy val sharedSettings = Seq(
     "org.typelevel" %% "cats-core" % "2.9.0",
     "org.scalameta" %% "munit" % "1.0.0-M6" % Test,
     "org.typelevel" %% "munit-cats-effect" % "2.0.0-M3" % Test
-  )
+  ),
+  scalacOptions ++= {
+    if (scalaVersion.value.startsWith("2")) {
+      Seq(
+        "-Xsource:3",
+      )
+    } else Seq.empty // Seq("-explain")
+  },
 )
 
 lazy val proto = project

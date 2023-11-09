@@ -25,15 +25,15 @@ sealed trait Consistency {
 
 object Consistency {
   case object MinimizeLatency extends Consistency {
-    val requirement = ps.Consistency.Requirement.MinimizeLatency(true)
+    def requirement: ps.Consistency.Requirement = ps.Consistency.Requirement.MinimizeLatency(true)
   }
   final case class AtLeastAsFresh(value: ZedToken) extends Consistency {
-    val requirement = ps.Consistency.Requirement.AtLeastAsFresh(value.encode)
+    def requirement: ps.Consistency.Requirement = ps.Consistency.Requirement.AtLeastAsFresh(value.encode)
   }
   final case class AtExactSnapshot(value: ZedToken) extends Consistency {
-    val requirement = ps.Consistency.Requirement.AtExactSnapshot(value.encode)
+    def requirement: ps.Consistency.Requirement = ps.Consistency.Requirement.AtExactSnapshot(value.encode)
   }
   case object FullyConsistent extends Consistency {
-    val requirement = ps.Consistency.Requirement.FullyConsistent(true)
+    def requirement: ps.Consistency.Requirement = ps.Consistency.Requirement.FullyConsistent(true)
   }
 }

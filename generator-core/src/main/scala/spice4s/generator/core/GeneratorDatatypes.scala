@@ -88,7 +88,7 @@ trait Spice4sAnyRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType] {
 
 trait Spice4sRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <: Spice4sResource] extends Spice4sAnyRelation[Res, Rel] {
   def subResource: Spice4sCompanion[Sub]
-  def subjects = NonEmptyList.one(subResource)
+  def subjects: NonEmptyList[Spice4sCompanion[? <: Spice4sResource]] = NonEmptyList.one(subResource)
   def apply(res: Res, sub: Sub): RelationshipRequest[Res, Rel, Sub] =
     RelationshipRequest(res, relation, sub, subjectRelation)
 }

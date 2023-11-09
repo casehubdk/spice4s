@@ -36,10 +36,10 @@ object Precondition {
   object Operation {
     import ps.Precondition.Operation._
     case object MustNotMatch extends Operation {
-      def encode = OPERATION_MUST_NOT_MATCH
+      def encode: ps.Precondition.Operation = OPERATION_MUST_NOT_MATCH
     }
     case object MustMatch extends Operation {
-      def encode = OPERATION_MUST_MATCH
+      def encode: ps.Precondition.Operation = OPERATION_MUST_MATCH
     }
   }
 }

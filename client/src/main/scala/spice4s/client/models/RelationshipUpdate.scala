@@ -36,13 +36,13 @@ object RelationshipUpdate {
   object Operation {
     import core.RelationshipUpdate.Operation._
     case object Create extends Operation {
-      def encode = OPERATION_CREATE
+      def encode: core.RelationshipUpdate.Operation = OPERATION_CREATE
     }
     case object Touch extends Operation {
-      def encode = OPERATION_TOUCH
+      def encode: core.RelationshipUpdate.Operation = OPERATION_TOUCH
     }
     case object Delete extends Operation {
-      def encode = OPERATION_DELETE
+      def encode: core.RelationshipUpdate.Operation = OPERATION_DELETE
     }
   }
 }
