@@ -21,12 +21,18 @@ import com.authzed.api.v1.{permission_service => ps}
 
 final case class SubjectFilter(
     subjectType: Type,
-    subjectId: Option[Id],
-    relationFilter: Option[Relation]
+    subjectId: Option[Id] = None,
+    relationFilter: Option[Relation] = None
 ) {
   def encode = ps.SubjectFilter.of(
     subjectType.value,
     subjectId.foldMap(_.value),
     relationFilter.map(f => ps.SubjectFilter.RelationFilter.of(f.value))
   )
+
+  def setSubjectType(st: Type) = copy(subjectType = st)
+
+  def setSubjectId(id: Id) = copy(subjectId = Some(id))
+
+  def setRelationFilter(rf: Relation) = copy(relationFilter = Some(rf))
 }

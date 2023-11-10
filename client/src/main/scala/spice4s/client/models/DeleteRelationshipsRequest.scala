@@ -21,9 +21,9 @@ import com.authzed.api.v1.{permission_service => ps}
 
 final case class DeleteRelationshipsRequest(
     filter: RelationshipFilter,
-    preconditions: List[Precondition],
-    limit: Option[Limit],
-    allowPartialDeletions: Option[Boolean]
+    preconditions: List[Precondition] = Nil,
+    limit: Option[Limit] = None,
+    allowPartialDeletions: Option[Boolean] = None
 ) {
   def encode = ps.DeleteRelationshipsRequest.of(
     filter.encode.some,

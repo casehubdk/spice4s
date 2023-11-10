@@ -20,12 +20,12 @@ import cats.implicits._
 import com.authzed.api.v1.{permission_service => ps}
 
 final case class LookupResourcesRequest(
-    consistency: Option[Consistency],
+    consistency: Option[Consistency] = None,
     resourceObjectType: Type,
     permission: Relation,
     subjectReference: SubjectReference,
-    limit: Option[Limit],
-    cursor: Option[Cursor]
+    limit: Option[Limit] = None,
+    cursor: Option[Cursor] = None
 ) {
   def encode = ps.LookupResourcesRequest.of(
     consistency.map(_.encode),

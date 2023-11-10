@@ -20,7 +20,7 @@ import cats.implicits._
 import com.authzed.api.v1.{permission_service => ps}
 
 final case class ExpandPermissionTreeRequest(
-    consistency: Option[Consistency],
+    consistency: Option[Consistency] = None,
     resource: ObjectReference,
     permission: Relation
 ) {

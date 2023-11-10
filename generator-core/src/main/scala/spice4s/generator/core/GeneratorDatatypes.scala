@@ -91,6 +91,26 @@ trait Spice4sRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <:
   def subjects: NonEmptyList[Spice4sCompanion[? <: Spice4sResource]] = NonEmptyList.one(subResource)
   def apply(res: Res, sub: Sub): RelationshipRequest[Res, Rel, Sub] =
     RelationshipRequest(res, relation, sub, subjectRelation)
+  def lookupSubjects(res: Res): LookupSubjectsRequest =
+    LookupSubjectsRequest(
+      None,
+      res.ref,
+      relation.relation,
+      subResource.constants.objectType,
+      subjectRelation,
+      None,
+      None,
+      None
+    )
+  def lookupResources(sub: Sub): LookupResourcesRequest =
+    LookupResourcesRequest(
+      None,
+      resource.constants.objectType,
+      relation.relation,
+      SubjectReference(sub.ref, subjectRelation),
+      None,
+      None
+    )
 }
 
 trait Spice4sUnionRelation[

@@ -21,9 +21,9 @@ import com.authzed.api.v1.{permission_service => ps}
 
 final case class RelationshipFilter(
     resourceType: Type,
-    resourceId: Option[Id],
-    relation: Option[Relation],
-    subjectFilter: Option[SubjectFilter]
+    resourceId: Option[Id] = None,
+    relation: Option[Relation] = None,
+    subjectFilter: Option[SubjectFilter] = None
 ) {
   def encode = ps.RelationshipFilter.of(
     resourceType.value,
@@ -31,4 +31,12 @@ final case class RelationshipFilter(
     relation.foldMap(_.value),
     subjectFilter.map(_.encode)
   )
+
+  def setResourceType(rt: Type) = copy(resourceType = rt)
+
+  def setResourceId(id: Id) = copy(resourceId = Some(id))
+
+  def setRelation(rel: Relation) = copy(relation = Some(rel))
+
+  def setSubjectFilter(sf: SubjectFilter) = copy(subjectFilter = Some(sf))
 }

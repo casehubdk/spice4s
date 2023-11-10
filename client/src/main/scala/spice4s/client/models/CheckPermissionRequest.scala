@@ -20,7 +20,7 @@ import cats.implicits._
 import com.authzed.api.v1.{permission_service => ps}
 
 final case class CheckPermissionRequest(
-    consistency: Option[Consistency],
+    consistency: Option[Consistency] = None,
     resource: ObjectReference,
     permission: Relation,
     subject: SubjectReference

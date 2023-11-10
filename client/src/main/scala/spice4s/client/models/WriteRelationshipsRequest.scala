@@ -23,7 +23,7 @@ import cats._
 
 final case class WriteRelationshipsRequest(
     updates: NonEmptyList[RelationshipUpdate],
-    preconditions: List[Precondition]
+    preconditions: List[Precondition] = Nil
 ) {
   def encode = ps.WriteRelationshipsRequest.of(
     updates.map(_.encode).toList,

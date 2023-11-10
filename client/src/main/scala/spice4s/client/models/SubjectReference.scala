@@ -22,7 +22,7 @@ import com.authzed.api.v1.core
 
 final case class SubjectReference(
     obj: ObjectReference,
-    relation: Option[Relation]
+    relation: Option[Relation] = None
 ) {
   def encode = core.SubjectReference.of(
     obj.encode.some,
