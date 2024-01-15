@@ -24,7 +24,7 @@ final case class LookupSubjectsResponse(
     lookupUpAt: ZedToken,
     subject: ResolvedSubject,
     excludedSubjects: List[ResolvedSubject],
-    afterResultCursor: Cursor
+    afterResultCursor: Option[Cursor]
 )
 
 object LookupSubjectsResponse {
@@ -37,6 +37,6 @@ object LookupSubjectsResponse {
           x.excludedSubjects.toList.map(ResolvedSubject.decode)
         }
       },
-      field("after_result_cursor")(req(x.afterResultCursor) andThen Cursor.decode andThen req)
+      field("after_result_cursor")(x.afterResultCursor.flatTraverse(Cursor.decode))
     ).mapN(LookupSubjectsResponse.apply)
 }

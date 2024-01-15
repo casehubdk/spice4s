@@ -24,7 +24,7 @@ final case class LookupResourcesResponse(
     lookedUpAt: ZedToken,
     resourceObjectId: String,
     permissionship: LookupPermissionship,
-    afterResultCursor: Cursor
+    afterResultCursor: Option[Cursor]
 )
 
 object LookupResourcesResponse {
@@ -33,6 +33,6 @@ object LookupResourcesResponse {
       field("looked_up_at")(req(x.lookedUpAt) andThen ZedToken.decode andThen req),
       x.resourceObjectId.validNec,
       field("permissionship")(LookupPermissionship.decode(x.permissionship)),
-      field("after_result_cursor")(req(x.afterResultCursor) andThen Cursor.decode andThen req)
+      field("after_result_cursor")(x.afterResultCursor.flatTraverse(Cursor.decode))
     ).mapN(LookupResourcesResponse.apply)
 }

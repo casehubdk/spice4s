@@ -118,7 +118,7 @@ class StubClient[F[_]: Monad](
               ZedToken.unsafeFromString("stub"),
               r.resource.objectId.value,
               LookupPermissionship.HasPermission,
-              Cursor.unsafeFromString("stub")
+              Some(Cursor.unsafeFromString("stub"))
             )
           }
         }
@@ -149,7 +149,7 @@ class StubClient[F[_]: Monad](
               ZedToken.unsafeFromString("stub"),
               ResolvedSubject(r.subject.obj.objectId.value, LookupPermissionship.HasPermission),
               Nil,
-              Cursor.unsafeFromString("stub")
+              Some(Cursor.unsafeFromString("stub"))
             )
           }
         }
