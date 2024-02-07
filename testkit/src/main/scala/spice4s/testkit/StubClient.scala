@@ -154,6 +154,27 @@ class StubClient[F[_]: Monad](
           }
         }
       }
+
+  override def bulkCheckPermission(x: BulkCheckPermissionRequest): F[BulkCheckPermissionResponse] =
+    x.items
+      .traverse { req =>
+        checkPermission(
+          CheckPermissionRequest(
+            x.consistency,
+            req.resource,
+            req.permission,
+            req.subject
+          )
+        ).map(res =>
+          BulkCheckPermissionPair(
+            req,
+            BulkCheckPermissionPair.Response.Item(
+              BulkCheckPermissionResponseItem(res.permissionship)
+            )
+          )
+        )
+      }
+      .map(xs => BulkCheckPermissionResponse(None, xs.toList))
 }
 
 object StubClient {

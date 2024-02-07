@@ -20,6 +20,7 @@ import cats.effect._
 import cats.implicits._
 import cats._
 import com.authzed.api.v1.permission_service.PermissionsServiceFs2Grpc
+import com.authzed.api.v1.experimental_service.ExperimentalServiceFs2Grpc
 import spice4s.client.models._
 import spice4s.client.util._
 import fs2.Stream
@@ -39,6 +40,8 @@ trait SpiceClient[F[_]] { self =>
   def lookupResources(x: LookupResourcesRequest): Stream[F, LookupResourcesResponse]
 
   def lookupSubjects(x: LookupSubjectsRequest): Stream[F, LookupSubjectsResponse]
+
+  def bulkCheckPermission(x: BulkCheckPermissionRequest): F[BulkCheckPermissionResponse]
 
   def mapK[G[_]](fk: F ~> G): SpiceClient[G] = new SpiceClient[G] {
     override def readRelationships(x: ReadRelationshipsRequest): Stream[G, ReadRelationshipsResponse] =
@@ -61,6 +64,9 @@ trait SpiceClient[F[_]] { self =>
 
     override def lookupSubjects(x: LookupSubjectsRequest): Stream[G, LookupSubjectsResponse] =
       self.lookupSubjects(x).translate(fk)
+
+    override def bulkCheckPermission(x: BulkCheckPermissionRequest): G[BulkCheckPermissionResponse] =
+      fk(self.bulkCheckPermission(x))
   }
 }
 
@@ -68,19 +74,22 @@ object SpiceClient {
   val AUTHORIZATION = "authorization"
   val METADATA_KEY = Metadata.Key.of(AUTHORIZATION, Metadata.ASCII_STRING_MARSHALLER)
 
-  def fromChannel[F[_]: Async](channel: Channel, token: String): Resource[F, SpiceClient[F]] =
-    PermissionsServiceFs2Grpc
-      .clientResource[F, Unit](
-        channel,
-        { _ =>
-          val m = new Metadata()
-          m.put(METADATA_KEY, s"Bearer ${token}")
-          m
-        }
-      )
-      .map(fromClient[F])
+  def fromChannel[F[_]: Async](channel: Channel, token: String): Resource[F, SpiceClient[F]] = {
+    val metadata = {
+      val m = new Metadata()
+      m.put(METADATA_KEY, s"Bearer ${token}")
+      m
+    }
+    (
+      PermissionsServiceFs2Grpc.clientResource[F, Unit](channel, _ => metadata),
+      ExperimentalServiceFs2Grpc.clientResource[F, Unit](channel, _ => metadata)
+    ).mapN(fromClient[F])
+  }
 
-  def fromClient[F[_]: MonadThrow](client: PermissionsServiceFs2Grpc[F, Unit]): SpiceClient[F] = {
+  def fromClient[F[_]: MonadThrow](
+      client: PermissionsServiceFs2Grpc[F, Unit],
+      experimental: ExperimentalServiceFs2Grpc[F, Unit]
+  ): SpiceClient[F] = {
     def decodeWith[A, B](f: A => Decoded[B]): A => F[B] = a => raiseIn[F, B](f(a))
 
     new SpiceClient[F] {
@@ -104,6 +113,9 @@ object SpiceClient {
 
       def lookupSubjects(x: LookupSubjectsRequest): Stream[F, LookupSubjectsResponse] =
         client.lookupSubjects(x.encode, ()).evalMap(decodeWith(LookupSubjectsResponse.decode))
+
+      def bulkCheckPermission(x: BulkCheckPermissionRequest): F[BulkCheckPermissionResponse] =
+        experimental.bulkCheckPermission(x.encode, ()).flatMap(decodeWith(BulkCheckPermissionResponse.decode))
     }
   }
 }

@@ -28,6 +28,7 @@ final case class RelationshipFilter(
   def encode = ps.RelationshipFilter.of(
     resourceType.value,
     resourceId.foldMap(_.value),
+    "",
     relation.foldMap(_.value),
     subjectFilter.map(_.encode)
   )
