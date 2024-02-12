@@ -75,7 +75,7 @@ object SpiceClient {
   val METADATA_KEY = Metadata.Key.of(AUTHORIZATION, Metadata.ASCII_STRING_MARSHALLER)
 
   def fromChannel[F[_]: Async](channel: Channel, token: String): Resource[F, SpiceClient[F]] = {
-    val metadata = {
+    def metadata = {
       val m = new Metadata()
       m.put(METADATA_KEY, s"Bearer ${token}")
       m
