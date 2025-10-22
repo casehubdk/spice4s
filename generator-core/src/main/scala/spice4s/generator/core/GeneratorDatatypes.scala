@@ -113,12 +113,18 @@ trait Spice4sRelation[Res <: Spice4sResource, Rel <: Spice4sRelationType, Sub <:
     )
 }
 
+final case class SubjectWrapper[Sub[x <: Spice4sResource] <: Spice4sCompanion[x], A <: Spice4sResource](
+    value: Sub[A]
+)
+
 trait Spice4sUnionRelation[
     Res <: Spice4sResource,
     Rel <: Spice4sRelationType,
     Sub[x <: Spice4sResource] <: Spice4sCompanion[x]
 ] extends Spice4sAnyRelation[Res, Rel] {
-  def subjects: NonEmptyList[Sub[? <: Spice4sResource]]
+  def _subjects: NonEmptyList[SubjectWrapper[Sub, ? <: Spice4sResource]]
+  def subjects: NonEmptyList[Spice4sCompanion[? <: Spice4sResource]] =
+    _subjects.map(_.value: Spice4sCompanion[? <: Spice4sResource])
   def apply[A <: Spice4sResource](res: Res, sub: A)(implicit @unused ev: Sub[A]): RelationshipRequest[Res, Rel, A] =
     RelationshipRequest(res, relation, sub, subjectRelation)
 }

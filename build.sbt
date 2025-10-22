@@ -1,7 +1,7 @@
-val scala213Version = "2.13.12"
+val ver = "3.7.3"
 
-ThisBuild / scalaVersion := scala213Version
-ThisBuild / crossScalaVersions := Seq(scala213Version /*, "3.3.0"*/ )
+ThisBuild / scalaVersion := ver
+ThisBuild / crossScalaVersions := Seq(ver /*, "3.3.0"*/ )
 ThisBuild / organization := "io.github.casehubdk"
 ThisBuild / organizationName := "CaseHubDK"
 
@@ -25,14 +25,7 @@ lazy val sharedSettings = Seq(
     "org.typelevel" %% "cats-core" % "2.9.0",
     "org.scalameta" %% "munit" % "1.0.0-M6" % Test,
     "org.typelevel" %% "munit-cats-effect" % "2.0.0-M3" % Test
-  ),
-  scalacOptions ++= {
-    if (scalaVersion.value.startsWith("2")) {
-      Seq(
-        "-Xsource:3",
-      )
-    } else Seq.empty // Seq("-explain")
-  },
+  )
 )
 
 lazy val proto = project
@@ -40,9 +33,16 @@ lazy val proto = project
   .enablePlugins(Fs2Grpc)
   .settings(
     name := "spice4s-client-proto-api",
-    scalapbCodeGenerators := scalapbCodeGenerators.value /* ++ Seq(
-      protocbridge.Target(scalapb.validate.gen(), (Compile / sourceManaged).value / "scalapb")
-    )*/,
+    libraryDependencies ++= Seq(
+      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
+    ),
+    scalapbCodeGeneratorOptions ++= Seq(
+      CodeGeneratorOption.Scala3Sources,
+      CodeGeneratorOption.NoLenses
+    ),
+    // scalapbCodeGenerators := scalapbCodeGenerators.value /* ++ Seq(
+      // protocbridge.Target(scalapb.validate.gen(), (Compile / sourceManaged).value / "scalapb")
+    // )*/,
     libraryDependencies ++= Seq(
       /* "com.thesamet.scalapb" %% "scalapb-validate-core" % scalapb.validate.compiler.BuildInfo.version % "protobuf", */
       "com.thesamet.scalapb.common-protos" %% "pgv-proto-scalapb_0.11" % "0.6.13-0",
@@ -112,7 +112,7 @@ lazy val generator = project
       "org.typelevel" %% "cats-effect" % "3.5.1",
       "co.fs2" %% "fs2-core" % "3.7.0",
       "co.fs2" %% "fs2-io" % "3.7.0",
-      "org.scalameta" %% "scalameta" % "4.8.6",
+      "org.scalameta" %% "scalameta" % "4.14.1",
       "org.typelevel" %% "cats-mtl" % "1.3.0"
     )
   )
